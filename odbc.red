@@ -1140,7 +1140,13 @@ context [
     set 'odbc-copy function [
         "Copy data from executed SQL statement."
         statement [object!]
+        /part "Limit the rows returned."
+            length [integer!]
     ][
+        if part [
+            cause-error 'user 'message ["Not implemented yet."]
+        ]
+
 		any [_fetch-statement statement/handle rows: copy []                 cause-error 'user 'message ["Error fetch statement."]]
 
         new-line/all rows on
