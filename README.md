@@ -39,7 +39,7 @@ is partly written in Red/system.
 Information on installed ODBC drivers is accessible with
 
 ```Red
-odbc-insert statement 'drivers
+odbc-drivers
 ```
 
 as a block of description/attributes pairs.
@@ -48,7 +48,7 @@ as a block of description/attributes pairs.
 Information on configured system and user ODBC datasources is accessible with
 
 ```Red
-odbc-insert statement 'sources
+odbc-sources
 ```
 
 as a block of datasource name and description pairs.
