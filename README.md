@@ -166,7 +166,7 @@ odbc-insert statement ["insert into Persons (Name, Age) values (?, ?)" person/na
 ```
 
 ## Retrieving result sets
-With SELECT statements, `odbc-insert` returns a block of column names as REBOL words (see below), on `odbc-copy` you retrieve the actual rows:
+With SELECT statements, `odbc-insert` returns a block of column names as Red words (see below), on `odbc-copy` you retrieve the actual rows:
 
 ```Red
 odbc-insert statement ["select LastName, FirstName from persons"]
@@ -205,7 +205,7 @@ odbc-copy/part statement 2
 :warning: Not implemented yet!
 
 For SELECT statements and catalog functions (see below) `odbc-insert` returns 
-a block of column names as REBOL words, while `odbc-copy` retrieves the actual
+a block of column names as Red words, while `odbc-copy` retrieves the actual
 results of the statement.
 
 Using the column names returned it's easy to keep your rebol code in sync with
