@@ -138,6 +138,16 @@ sqlsmallint!: alias struct! [lo [byte!] hi [byte!]]
 #define SQL_NULLABLE                    1
 #define SQL_NULLABLE_UNKNOWN            2
 
+
+;-- whether an attribute is a pointer or not
+;
+#define SQL_IS_POINTER             -4 ; FFFCh ; -4
+#define SQL_IS_UINTEGER            -5 ; FFFBh ; -5
+#define SQL_IS_INTEGER             -6 ; FFFAh ; -6
+#define SQL_IS_USMALLINT           -7 ; FFF9h ; -7
+#define SQL_IS_SMALLINT            -8 ; FFF8h ; -8
+
+
 ;-- SQL data type codes
 ;
 
@@ -307,6 +317,17 @@ SQLGetDiagRec: "SQLGetDiagRec"     [
     length      [integer!]
     length-ptr  [pointer! [integer!]]
     return:     [integer!]
+]
+
+SQLConnect: "SQLConnectW" [
+    connection      [sql-handle!]
+    server-name     [c-string!]
+    length-1        [sqlsmallint! value]
+    user-name       [c-string!]
+    length-2        [sqlsmallint! value]
+    authentication  [c-string!]
+    length-3        [sqlsmallint! value]
+    return:         [integer!]
 ]
 
 SQLDriverConnect: "SQLDriverConnectW" [

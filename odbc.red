@@ -141,7 +141,7 @@ Red [
             ;
             result: result-of SQLSetEnvAttr environment/henv
                                             SQL_ATTR_ODBC_VERSION
-                                            SQL_OV_ODBC3
+                                            SQL_OV_ODBC2
                                             0                                   ODBC_DEBUG ["SQLSetEnvAttr " result lf]
                                                                                 if result = SQL_ERROR [
                                                                                     diagnose-error SQL_HANDLE_ENV environment/henv
@@ -159,7 +159,7 @@ Red [
             return:    [red-value!]
             /local
                 connection result in-conn len1 [integer!] cstr [c-string!]
-                out-conn sz2 len2 [integer!]
+                out-conn sz2 len2 [integer!] length-1 length-2 length-3
         ][
             ODBC_DEBUG ["OPEN-CONNECTION" lf]
 
@@ -177,6 +177,14 @@ Red [
                                              environment/henv
                                              as byte-ptr! :connection/hdbc      ODBC_DEBUG ["SQLAllocHandle " result lf]
                                                                                 if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_ENV environment/henv)]
+            ;-- set SQL_ATTR_LOGIN_TIMEOUT connection attribute.
+            ;
+            result: result-of SQLSetConnectAttr connection/hdbc
+                                                SQL_ATTR_LOGIN_TIMEOUT
+                                                5                               ;-- FIXME: hardcoded value
+                                                SQL_IS_INTEGER                  ODBC_DEBUG ["SQLSetConnectAttr " result lf]
+                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+
             ;-- Connect to driver
             ;
             in-conn: unicode/to-utf16 datasource
@@ -195,6 +203,27 @@ Red [
                                                :len2
                                                SQL_DRIVER_NOPROMPT              ODBC_DEBUG ["SQLDriverConnect " result lf]
                                                                                 if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+
+            ;-- alternative simpler version with SQLConnect
+            ;
+            comment [
+                length-1: declare sqlsmallint!
+                length-2: declare sqlsmallint!
+                length-3: declare sqlsmallint!
+
+                SET_INT16(length-1 (string/rs-length? datasource))
+                SET_INT16(length-2 0)
+                SET_INT16(length-3 0)
+
+                result: result-of SQLConnect connection/hdbc
+                                            in-conn
+                                            length-1
+                                            null
+                                            length-2
+                                            null
+                                            length-3                               ODBC_DEBUG ["SQLConnect " result lf]
+                                                                                    if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+            ]
 
             environment/conn-cnt: environment/conn-cnt + 1
 
@@ -612,53 +641,97 @@ Red [
 
             count:  declare sqlsmallint!
 
+            column/buffer-size: 0
+            column/buffer:      null
+
             switch column/sql-type [
+                SQL_CHAR
+                SQL_VARCHAR
+                SQL_LONGVARCHAR [
+                    SET_INT16(column/c-type SQL_C_WCHAR)                        ;-- FIXME: Okay?
+                    column/buffer-size:     (column/column-size + 1) << 1
+                ]
+                SQL_WCHAR
+                SQL_WVARCHAR
+                SQL_WLONGVARCHAR [
+                    SET_INT16(column/c-type SQL_C_WCHAR)
+                    column/buffer-size:     (column/column-size + 1) << 1
+                ]
+                SQL_DECIMAL [
+                    print ["SQL_DECIMAL dataype not supported." lf]
+                ]
+                SQL_NUMERIC [
+                    print ["SQL_DECIMAL dataype not supported." lf]
+                   ;SET_INT16(column/c-type SQL_C_LONG)
+                   ;column/buffer-size:    4
+                ]
                 SQL_SMALLINT
-                SQL_TINYINT
                 SQL_INTEGER [
                     SET_INT16(column/c-type SQL_C_LONG)
                     column/buffer-size:     4
                 ]
-                ;SQL_NUMERIC [
-                ;    SET_INT16(column/c-type SQL_C_LONG)
-                ;    column/buffer-size:    4
-                ;]
-                ;SQL_DECIMAL []
-                ;SQL_DATE SQL_TYPE_DATE [ ;-- Error 22007, Invalid datetime format 107
-                ;    SET_INT16(column/c-type SQL_C_TYPE_DATE)
-                ;    ODBC_DEBUG [size? SQL_DATE_STRUCT " " SQL_C_TYPE_DATE " " column/datatype ", "]
-                ;    column/buffer-size:    size? SQL_DATE_STRUCT
-                ;]
-                SQL_DATE
-                SQL_TYPE_DATE [
-                    SET_INT16(column/c-type SQL_C_WCHAR)
-                    column/buffer-size:     SQL_DATE_LEN + 1 << 22
-                ]
-                SQL_TYPE_TIME [
-                    SET_INT16(column/c-type SQL_C_WCHAR)
-                    column/buffer-size:     SQL_TIME_LEN + 1 << 1
-                ]
-                SQL_TYPE_TIMESTAMP [
-                    SET_INT16(column/c-type SQL_C_WCHAR)
-                    column/buffer-size:     SQL_TIMESTAMP_LEN + 1 << 1
+                SQL_REAL
+                SQL_FLOAT
+                SQL_DOUBLE [
+                    SET_INT16(column/c-type SQL_C_DOUBLE)
+                    column/buffer-size:     8
                 ]
                 SQL_BIT [
                     SET_INT16(column/c-type SQL_C_CHAR)
                     column/buffer-size:     4                                   ;-- FIXE: hardcoded value
                 ]
-                SQL_CHAR
-                SQL_WCHAR
-                SQL_VARCHAR
-                SQL_WVARCHAR [
-                    column/c-type/lo:       as byte! SQL_C_WCHAR and FFh
-                    column/c-type/hi:       as byte! SQL_C_WCHAR >> 8 and FFh
+                SQL_TINYINT
+                SQL_BIGINT [
+                    print ["SQL_TINYINT/BIGINT dataypes not supported." lf]
+                ]
+                SQL_BINARY
+                SQL_VARBINARY
+                SQL_LONGVARBINARY [
+                    print ["SQL_((LONG)VAR)BINARY dataypes not supported." lf]
+                ]
+               ;SQL_DATE
+               ;SQL_TYPE_DATE [
+               ;    ;-- Error 22007, Invalid datetime format 107
+               ;    SET_INT16(column/c-type SQL_C_TYPE_DATE)
+               ;    ODBC_DEBUG [size? SQL_DATE_STRUCT " " SQL_C_TYPE_DATE " " column/datatype ", "]
+               ;    column/buffer-size:    size? SQL_DATE_STRUCT
+               ;]
+                SQL_DATE
+                SQL_TYPE_DATE [
+                    SET_INT16(column/c-type SQL_C_WCHAR)
+                    column/buffer-size:     SQL_DATE_LEN + 1 << 22
+                ]
+                SQL_TIME
+                SQL_TYPE_TIME [
+                    SET_INT16(column/c-type SQL_C_WCHAR)
+                    column/buffer-size:     SQL_TIME_LEN + 1 << 1
+                ]
+                SQL_TIMESTAMP
+                SQL_TYPE_TIMESTAMP [
+                    SET_INT16(column/c-type SQL_C_WCHAR)
+                    column/buffer-size:     SQL_TIMESTAMP_LEN + 1 << 1
+                ]
+               ;SQL_INTERVAL_MONTH
+               ;SQL_INTERVAL_YEAR
+               ;SQL_INTERVAL_YEAR_TO_MONTH
+               ;SQL_INTERVAL_DAY
+               ;SQL_INTERVAL_HOUR
+               ;SQL_INTERVAL_MINUTE
+               ;SQL_INTERVAL_SECOND
+               ;SQL_INTERVAL_DAY_TO_HOUR
+               ;SQL_INTERVAL_DAY_TO_MINUTE
+               ;SQL_INTERVAL_DAY_TO_SECOND
+               ;SQL_INTERVAL_HOUR_TO_MINUTE
+               ;SQL_INTERVAL_HOUR_TO_SECOND
+               ;SQL_INTERVAL_MINUTE_TO_SECOND [
+               ;    print ["SQL interval dataypes not supported." lf]
+               ;]
+                SQL_GUID [
+                    SET_INT16(column/c-type SQL_C_WCHAR)
                     column/buffer-size:     (column/column-size + 1) << 1
                 ]
-                ;SQL_BINARY SQL_VARBINARY [
-                ;]
                 default [
-                    column/buffer-size:     0                                   ;-- FIXME: hardcoded value
-                    column/buffer:          null
+                    print ["Unknown dataype not supported." lf]
                 ]
             ]
 
@@ -687,12 +760,13 @@ Red [
             columns     [red-block!]
             return:     [red-value!]
             /local
-                statement result count c column
+                statement result count c column rows
         ][
             ODBC_DEBUG ["DESCRIBE-STATEMENT" lf]
 
             count:      declare sqlsmallint!
-            
+            rows:       0
+
             statement:  as statement! holder/value
 
             result:     result-of SQLNumResultCols statement/hstmt
@@ -701,18 +775,26 @@ Red [
             statement/columns-cnt:  GET_INT16(count)
             statement/columns:      as column! allocate-buffer statement/columns-cnt * size? column!
 
-            column: statement/columns
-            c:      1
+            either zero? statement/columns-cnt [
+                result:     result-of SQLRowCount statement/hstmt
+                                                 :rows                          ODBC_DEBUG ["SQLRowCount " result lf]
+                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
 
-            loop statement/columns-cnt [
-                describe-column statement/hstmt column c columns
-                
-                bind-column     statement/hstmt column c
+                integer/make-in columns rows
+            ][
+                column: statement/columns
+                c:      1
 
-                column: column + 1
-                c:      c + 1
+                loop statement/columns-cnt [
+                    describe-column statement/hstmt column c columns
+
+                    bind-column     statement/hstmt column c
+
+                    column: column + 1
+                    c:      c + 1
+                ]
             ]
-                
+
             as red-value! logic/box true
         ]
 
@@ -736,43 +818,88 @@ Red [
             ]
 
             switch column/sql-type [
+                SQL_CHAR
+                SQL_VARCHAR
+                SQL_LONGVARCHAR [
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind >> 1 row UTF-16LE
+                ]
+                SQL_WCHAR
+                SQL_WVARCHAR
+                SQL_WLONGVARCHAR [
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind >> 1 row UTF-16LE
+                ]
+                SQL_DECIMAL [
+                    none/make-in row
+                ]
+                SQL_NUMERIC [
+                ;   integer-ptr: as [pointer! [integer!]] column/buffer
+                ;   float/make-in row integer-ptr/value 0
+                    none/make-in row
+                ]
                 SQL_SMALLINT
-                SQL_TINYINT
                 SQL_INTEGER [
                     integer-ptr: as [pointer! [integer!]] column/buffer
                     integer/make-in row integer-ptr/value
                 ]
-                ;SQL_NUMERIC [
-                ;    integer-ptr: as [pointer! [integer!]] column/buffer
-                ;    float/make-in row integer-ptr/value 0
-                ;]
-                ;SQL_DATE
-                ;SQL_TYPE_DATE [
-                ;    date-ptr: as SQL_DATE_STRUCT column/buffer
-                ;    year:   (as integer! date-ptr/year_hi ) << 4 or (as integer! date-ptr/year_lo)
-                ;    month:  (as integer! date-ptr/month_hi) << 4 or (as integer! date-ptr/month_lo)
-                ;    day:    (as integer! date-ptr/day_hi  ) << 4 or (as integer! date-ptr/day_lo)
-                ;
-                ;    integer/make-in row year
-                ;]
+                SQL_REAL
+                SQL_FLOAT
+                SQL_DOUBLE [
+                    float-ptr: as struct! [int1 [integer!] int2 [integer!]] column/buffer
+                    float/make-in row float-ptr/int2 float-ptr/int1
+                ]
+                SQL_BIT [
+                    logic/make-in row all [column/buffer/0 = #"^(8C)" column/buffer/1 = #"^(31)"]
+                ]
+                SQL_TINYINT
+                SQL_BIGINT [
+                    none/make-in row
+                ]
+                SQL_BINARY
+                SQL_VARBINARY
+                SQL_LONGVARBINARY [
+                    none/make-in row
+                ]
+               ;SQL_DATE
+               ;SQL_TYPE_DATE [
+               ;    date-ptr: as SQL_DATE_STRUCT column/buffer
+               ;    year:   (as integer! date-ptr/year_hi ) << 4 or (as integer! date-ptr/year_lo)
+               ;    month:  (as integer! date-ptr/month_hi) << 4 or (as integer! date-ptr/month_lo)
+               ;    day:    (as integer! date-ptr/day_hi  ) << 4 or (as integer! date-ptr/day_lo)
+               ;    integer/make-in row year
+               ;]
                 SQL_DATE
                 SQL_TYPE_DATE [
                     value: as c-string! column/buffer
                     string/load-in as c-string! column/buffer 10 row UTF-16LE
                 ]
+                SQL_TIME
                 SQL_TYPE_TIME [
                     value: as c-string! column/buffer
                     string/load-in as c-string! column/buffer 8 row UTF-16LE
                 ]
+                SQL_TIMESTAMP
                 SQL_TYPE_TIMESTAMP [
                     value: as c-string! column/buffer
                     string/load-in as c-string! column/buffer 19 row UTF-16LE
                 ]
-                SQL_BIT [
-                    logic/make-in row all [column/buffer/0 = #"^(8C)" column/buffer/1 = #"^(31)"]
-                ]
-                SQL_CHAR
-                SQL_VARCHAR [
+               ;SQL_INTERVAL_MONTH
+               ;SQL_INTERVAL_YEAR
+               ;SQL_INTERVAL_YEAR_TO_MONTH
+               ;SQL_INTERVAL_DAY
+               ;SQL_INTERVAL_HOUR
+               ;SQL_INTERVAL_MINUTE
+               ;SQL_INTERVAL_SECOND
+               ;SQL_INTERVAL_DAY_TO_HOUR
+               ;SQL_INTERVAL_DAY_TO_MINUTE
+               ;SQL_INTERVAL_DAY_TO_SECOND
+               ;SQL_INTERVAL_HOUR_TO_MINUTE
+               ;SQL_INTERVAL_HOUR_TO_SECOND
+               ;SQL_INTERVAL_MINUTE_TO_SECOND [
+               ;    none/make-in row
+               ;]
+                SQL_GUID [
                     value: as c-string! column/buffer
                     string/load-in as c-string! column/buffer column/strlen-ind >> 1 row UTF-16LE
                 ]
@@ -943,7 +1070,7 @@ Red [
                                      :native-error
                                       null
                                       0
-                                     :text-length                               ODBC_DEBUG ["SQLGetDiagRecord " result lf]
+                                     :text-length                               print ["SQLGetDiagRecord " result lf]
                                                                                 unless result = SQL_SUCCESS [exit]
                 buffer-length: (text-length + 1) << 1
                 message:        as c-string! allocate-buffer buffer-length
