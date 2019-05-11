@@ -263,19 +263,19 @@ Red [
             sql         [red-block!]
             return:     [red-value!]
             /local
-                statement len query text result
+                statement query text result red-str
         ][
             ODBC_DEBUG ["PREPARE-STATEMENT" lf]
 
             statement: as statement! holder/value
 
-            len:  -1
             query: block/rs-head sql
-            text: unicode/to-utf8 as red-string! query :len
+            red-str: as red-string! query
+            text: unicode/to-utf16 red-str
 
             result: result-of SQLPrepare statement/hstmt
                                          as byte-ptr! text
-                                         len                                    ODBC_DEBUG ["SQLPrepare " result lf]
+                                         string/rs-length? red-str              ODBC_DEBUG ["SQLPrepare " result lf]
                                                                                 if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
             as red-value! logic/box true
         ]
@@ -491,7 +491,7 @@ Red [
                 ]
                 TYPE_STRING [
                     SET_INT16(c-type    SQL_C_WCHAR)
-                    SET_INT16(sql-type  SQL_VARCHAR)
+                    SET_INT16(sql-type  SQL_WVARCHAR)
                     red-str:            as red-string! value
                     str-len:            string/rs-length? red-str
                     buffer-size:        str-len + 1 << 1

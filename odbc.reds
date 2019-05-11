@@ -441,7 +441,7 @@ SQLNumResultCols: "SQLNumResultCols" [
     return:                 [integer!]
 ]
 
-SQLPrepare: "SQLPrepare" [
+SQLPrepare: "SQLPrepareW" [
     statement               [sql-handle!]
     statement-text          [byte-ptr!]
     text-length             [integer!]
