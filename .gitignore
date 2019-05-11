@@ -3,6 +3,7 @@
 .hgignore
 demo.exe
 demo.red
+people.xls
 libRedRT*
 makefile
 odbc.exe
