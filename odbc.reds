@@ -281,100 +281,10 @@ SQL_TIMESTAMP_STRUCT: alias struct! [
 
 #import [ODBC_LIBRARY stdcall [
 
-;-- SQLRETURN SQLAllocHandle( SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDLE* OutputHandlePtr)
-;
-
 SQLAllocHandle: "SQLAllocHandle" [
-    type        [integer!]
-    input       [sql-handle!]
-    output*     [byte-ptr!]
-    return:     [integer!]
-]
-
-SQLSetEnvAttr: "SQLSetEnvAttr" [
-    environment [sql-handle!]
-    attribute   [integer!]
-    value       [integer!]
-    length      [integer!]
-    return:     [integer!]
-]
-
-SQLSetConnectAttr: "SQLSetConnectAttr" [
-    connection  [sql-handle!]
-    attribute   [integer!]
-    value       [integer!]
-    length      [integer!]
-    return:     [integer!]
-]
-
-SQLGetDiagRec: "SQLGetDiagRec"     [
-    type        [integer!]
-    handle      [sql-handle!]
-    record      [integer!]
-    state       [pointer! [byte!]]
-    error-ptr   [pointer! [integer!]]
-    message     [pointer! [byte!]]
-    length      [integer!]
-    length-ptr  [pointer! [integer!]]
-    return:     [integer!]
-]
-
-SQLConnect: "SQLConnectW" [
-    connection      [sql-handle!]
-    server-name     [c-string!]
-    length-1        [sqlsmallint! value]
-    user-name       [c-string!]
-    length-2        [sqlsmallint! value]
-    authentication  [c-string!]
-    length-3        [sqlsmallint! value]
-    return:         [integer!]
-]
-
-SQLDriverConnect: "SQLDriverConnectW" [
-    connection              [sql-handle!]
-    window-handle           [pointer! [byte!]]
-    in-connection-string    [pointer! [byte!]]
-    string-length-1         [integer!]
-    out-connection-string   [pointer! [byte!]]
-    buffer-length           [integer!]
-    string-length-2-ptr     [pointer! [integer!]]
-    driver-completion       [integer!]
-    return:                 [integer!]
-]
-
-SQLPrepare: "SQLPrepare" [
-    statement               [sql-handle!]
-    statement-text          [pointer! [byte!]]
-    text-length             [integer!]
-    return:                 [integer!]
-]
-
-SQLExecute: "SQLExecute" [
-    statement               [sql-handle!]
-    return:                 [integer!]
-]
-
-SQLNumResultCols: "SQLNumResultCols" [
-    statement               [sql-handle!]
-    column-count            [pointer! [byte!]]
-    return:                 [integer!]
-]
-
-SQLTest: "SQLTest" [
-    column-number [sqlsmallint! value]
-    return:       [integer!]
-]
-
-SQLDescribeCol: "SQLDescribeColW" [
-    statement               [sql-handle!]
-    column-number           [sqlsmallint! value]
-    column-name             [c-string!] ;[sqlchar!*]
-    buffer-length           [sqlsmallint! value]
-    name-length             [sqlsmallint!]
-    sql-type                [sqlsmallint!]
-    column-size             [pointer! [integer!]] ;[sqlulen!*]  (unsigned long)
-    decimal-digits          [sqlsmallint!]
-    nullable                [sqlsmallint!]
+    type                    [integer!]
+    input                   [sql-handle!]
+    output*                 [byte-ptr!]
     return:                 [integer!]
 ]
 
@@ -382,14 +292,23 @@ SQLBindCol: "SQLBindCol" [
     statement               [sql-handle!]
     column-number           [sqlsmallint! value]
     target-type             [sqlsmallint! value]
-    target-value            [byte-ptr!] ;SQLPOINTER
-    buffer-length           [integer!] ;SQLLEN
-    strlen-or-ind           [pointer! [integer!]] ;SQLLEN*
+    target-value            [byte-ptr!]
+    buffer-length           [integer!]
+    strlen-or-ind           [pointer! [integer!]]
     return:                 [integer!]
 ]
 
-SQLFetch: "SQLFetch" [
+SQLBindParameter: "SQLBindParameter" [
     statement               [sql-handle!]
+    param-number            [sqlsmallint! value]
+    input-output-type       [sqlsmallint! value]
+    value-type              [sqlsmallint! value]
+    parameter-type          [sqlsmallint! value]
+    column-size             [integer!]
+    decimal-digits          [sqlsmallint! value]
+    param-value-ptr         [byte-ptr!]
+    buffer-length           [integer!]
+    strlen-or-ind-ptr       [pointer! [integer!]]
     return:                 [integer!]
 ]
 
@@ -398,52 +317,27 @@ SQLCloseCursor: "SQLCloseCursor" [
     return:                 [integer!]
 ]
 
-SQLFreeStmt: "SQLFreeStmt" [
-    statement               [sql-handle!]
-    option                  [sqlsmallint! value] ;SQLUSMALLINT
-    return:                 [integer!]
-]
-
-SQLFreeHandle: "SQLFreeHandle" [
-    type                    [integer!]
-    statement               [sql-handle!]
-    return:                 [integer!]
-]
-
-SQLDisconnect: "SQLDisconnect" [
-    connection              [sql-handle!]
-    return:                 [integer!]
-]
-
-SQLTables: "SQLTablesW" [
-    statement               [sql-handle!]
-    catalog-name            [c-string!]             ; SQLCHAR *      CatalogName,
-    name-length-1           [sqlsmallint! value]    ; SQLSMALLINT    NameLength1,
-    schema-name             [c-string!]             ; SQLCHAR *      SchemaName,
-    name-length-2           [sqlsmallint! value]    ; SQLSMALLINT    NameLength2,
-    table-name              [c-string!]             ; SQLCHAR *      TableName,
-    name-length-3           [sqlsmallint! value]    ; SQLSMALLINT    NameLength3,
-    table-type              [c-string!]             ; SQLCHAR *      TableType,
-    name-length-4           [sqlsmallint! value]    ; SQLSMALLINT    NameLength4,
-    return:                 [integer!]
-]
-
 SQLColumns: "SQLColumnsW" [
     statement               [sql-handle!]
-    catalog-name            [c-string!]             ; SQLCHAR *      CatalogName,
-    name-length-1           [sqlsmallint! value]    ; SQLSMALLINT    NameLength1,
-    schema-name             [c-string!]             ; SQLCHAR *      SchemaName,
-    name-length-2           [sqlsmallint! value]    ; SQLSMALLINT    NameLength2,
-    table-name              [c-string!]             ; SQLCHAR *      TableName,
-    name-length-3           [sqlsmallint! value]    ; SQLSMALLINT    NameLength3,
-    column-name             [c-string!]             ; SQLCHAR *      ColumnName,
-    name-length-4           [sqlsmallint! value]    ; SQLSMALLINT    NameLength4,
+    catalog-name            [c-string!]             
+    name-length-1           [sqlsmallint! value]    
+    schema-name             [c-string!]             
+    name-length-2           [sqlsmallint! value]    
+    table-name              [c-string!]             
+    name-length-3           [sqlsmallint! value]    
+    column-name             [c-string!]             
+    name-length-4           [sqlsmallint! value]    
     return:                 [integer!]
 ]
 
-SQLGetTypeInfo: "SQLGetTypeInfo" [
-    statement               [sql-handle!]
-    datatype                [sqlsmallint! value]              ; SQLSMALLINT    DataType
+SQLConnect: "SQLConnectW" [
+    connection              [sql-handle!]
+    server-name             [c-string!]
+    length-1                [sqlsmallint! value]
+    user-name               [c-string!]
+    length-2                [sqlsmallint! value]
+    authentication          [c-string!]
+    length-3                [sqlsmallint! value]
     return:                 [integer!]
 ]
 
@@ -459,6 +353,36 @@ SQLDataSources: "SQLDataSourcesW" [
     return:                 [integer!]
 ]
 
+SQLDescribeCol: "SQLDescribeColW" [
+    statement               [sql-handle!]
+    column-number           [sqlsmallint! value]
+    column-name             [c-string!]
+    buffer-length           [sqlsmallint! value]
+    name-length             [sqlsmallint!]
+    sql-type                [sqlsmallint!]
+    column-size             [pointer! [integer!]]
+    decimal-digits          [sqlsmallint!]
+    nullable                [sqlsmallint!]
+    return:                 [integer!]
+]
+
+SQLDisconnect: "SQLDisconnect" [
+    connection              [sql-handle!]
+    return:                 [integer!]
+]
+
+SQLDriverConnect: "SQLDriverConnectW" [
+    connection              [sql-handle!]
+    window-handle           [byte-ptr!]
+    in-connection-string    [byte-ptr!]
+    string-length-1         [integer!]
+    out-connection-string   [byte-ptr!]
+    buffer-length           [integer!]
+    string-length-2-ptr     [pointer! [integer!]]
+    driver-completion       [integer!]
+    return:                 [integer!]
+]
+
 SQLDrivers: "SQLDriversW" [
     enviromment             [sql-handle!]
     direction               [sqlsmallint! value]
@@ -471,23 +395,96 @@ SQLDrivers: "SQLDriversW" [
     return:                 [integer!]
 ]
 
+SQLExecute: "SQLExecute" [
+    statement               [sql-handle!]
+    return:                 [integer!]
+]
+
+SQLFetch: "SQLFetch" [
+    statement               [sql-handle!]
+    return:                 [integer!]
+]
+
+SQLFreeHandle: "SQLFreeHandle" [
+    type                    [integer!]
+    statement               [sql-handle!]
+    return:                 [integer!]
+]
+
+SQLFreeStmt: "SQLFreeStmt" [
+    statement               [sql-handle!]
+    option                  [sqlsmallint! value]
+    return:                 [integer!]
+]
+
+SQLGetDiagRec: "SQLGetDiagRec"     [
+    type                    [integer!]
+    handle                  [sql-handle!]
+    record                  [integer!]
+    state                   [byte-ptr!]
+    error-ptr               [pointer! [integer!]]
+    message                 [byte-ptr!]
+    length                  [integer!]
+    length-ptr              [pointer! [integer!]]
+    return:                 [integer!]
+]
+
+SQLGetTypeInfo: "SQLGetTypeInfo" [
+    statement               [sql-handle!]
+    datatype                [sqlsmallint! value]
+    return:                 [integer!]
+]
+
+SQLNumResultCols: "SQLNumResultCols" [
+    statement               [sql-handle!]
+    column-count            [byte-ptr!]
+    return:                 [integer!]
+]
+
+SQLPrepare: "SQLPrepare" [
+    statement               [sql-handle!]
+    statement-text          [byte-ptr!]
+    text-length             [integer!]
+    return:                 [integer!]
+]
+
 SQLRowCount: "SQLRowCount" [
     statement               [sql-handle!]
     row-count-ptr           [pointer! [integer!]]
     return:                 [integer!]
 ]
 
-SQLBindParameter: "SQLBindParameter" [
+SQLSetConnectAttr: "SQLSetConnectAttr" [
+    connection              [sql-handle!]
+    attribute               [integer!]
+    value                   [integer!]
+    length                  [integer!]
+    return:                 [integer!]
+]
+
+SQLSetEnvAttr: "SQLSetEnvAttr" [
+    environment             [sql-handle!]
+    attribute               [integer!]
+    value                   [integer!]
+    length                  [integer!]
+    return:                 [integer!]
+]
+
+SQLTables: "SQLTablesW" [
     statement               [sql-handle!]
-    param-number            [sqlsmallint! value]
-    input-output-type       [sqlsmallint! value]
-    value-type              [sqlsmallint! value]
-    parameter-type          [sqlsmallint! value]
-    column-size             [integer!]                        ; [sqlulen!*]  (unsigned long)
-    decimal-digits          [sqlsmallint! value]
-    param-value-ptr         [byte-ptr!]
-    buffer-length           [integer!]
-    strlen-or-ind-ptr       [pointer! [integer!]]             ; SQLLEN*
+    catalog-name            [c-string!]
+    name-length-1           [sqlsmallint! value]
+    schema-name             [c-string!]
+    name-length-2           [sqlsmallint! value]
+    table-name              [c-string!]
+    name-length-3           [sqlsmallint! value]
+    table-type              [c-string!]
+    name-length-4           [sqlsmallint! value]
+    return:                 [integer!]
+]
+
+SQLTest: "SQLTest" [
+    column-number           [sqlsmallint! value]
     return:                 [integer!]
 ]
 
