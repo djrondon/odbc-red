@@ -116,7 +116,7 @@ The following examples should give an (informal) idea on how SQL statements are 
 
 ```Red
 odbc-insert statement "select * from Cinema.Film"
-== [id category description length playing-now rating tickets-sold title]
+== [ID Category Description Length PlayingNow Rating TicketsSold Title]
 odbc-copy statement
 == [
     [1 1 {A post-modern excursion into family dynamics and Thai cuisine.} 130 true "PG-13" 47000 "ÄÖÜßäöü"]
@@ -131,7 +131,7 @@ A parametrized SELECT statement:
 
 ```Red
 odbc-insert statement ["select * from Cinema.Film where ID = ?" 6]
-== [id category description length playing-now rating tickets-sold title]
+== [ID Category Description Length PlayingNow Rating TicketsSold Title]
 odbc-copy statement
 == [[6 2 "A heart-warming tale of friendship" 91 true "G" 7500 "Gangs of New York"]]
 ```
@@ -170,7 +170,7 @@ With SELECT statements, `odbc-insert` returns a block of column names as Red wor
 
 ```Red
 odbc-insert statement ["select LastName, FirstName from persons"]
-== [last-name first-name]
+== [LastName FirstName]
 odbc-copy statement
 == [
     ["Acre" "Anton"]
@@ -182,7 +182,7 @@ When you have to work with large result sets, you may want to retrieve results i
 
 ```Red
 odbc-insert statement ["select LastName, FirstName from persons"]
-== [last-name first-name]
+== [LastName FirstName]
 odbc-copy/part statement 2
 == [
     ["Anderson" "Anton"]
@@ -202,7 +202,6 @@ odbc-copy/part statement 2
 ```
 
 ## Column names
-:warning: Not implemented yet!
 
 For SELECT statements and catalog functions (see below) `odbc-insert` returns 
 a block of column names as Red words, while `odbc-copy` retrieves the actual
@@ -213,7 +212,7 @@ your SQL statements:
 
 ```Red
 columns: odbc-insert statement ["select ID, Category, Title from Cinema.Film"]
-== [id category title]
+== [ID Category Title]
 foreach :columns odbc-copy statement [print [id category title]]
 1 1 ÄÖÜßäöü
 2 1 A Kung Fu Hangman1
@@ -227,7 +226,7 @@ If, for some reason, you later change your SQL statement to something like
 
 ```Red
 columns: odbc-insert statement ["select ID, Descriptions, Title, Length, Category from cinema.film"]
-== [id description title length category]
+== [ID Description Title Length Category]
 ```
 
 this will work without modifications with the same retrieval code as above,
@@ -243,40 +242,7 @@ foreach :columns odbc-copy statement [print [id category title]]
 ```
 
 The column names are generated directly from the result set's column
-description and made available as normal Red words. There is some "magic"
-involved which transforms names to adhere to Red standards of lowercase 
-hyphenated words instead of e.g. "CamelCaseWords".
-
-The rules are fairly simple:
-
-- "ABc" becomes 'a-bc,
-- "aB" becomes 'a-b,
-- underscores "_" and spaces " " are replaced with hyphens "-"
-- all uppercase letters are converted to lowercase
-
-Some examples:
-
-SQL names | Red words_ID
-------------|---------------
- FirstName  | first-name
- isValid  | is-valid
- CamelCaseABC   | camel-case-abc
- ODBCTest | odbc-test
- Expr_1 | expr-1
- A1B2 | a1b2
-
-This translation can be turned off by
-
-```Red
-odbc-config statement [convert column names] 
-```
-
-and turned on by
-
-```Red
-odbc-config statement [keep column names] 
-```
-:warning: Not implemented yet!
+description and made available as normal Red words.
 
 ## Prepared Statements
 Often, you'll find yourself executing the same SQL statements again and again. 
@@ -324,54 +290,6 @@ odbc-insert db [customers 4] ;-- execution only
 odbc-insert db [products  1] ;-- again, preparation and execution
 ```
 
-## Result Rows and Values
-:warning: Not implemented yet!
-
-Sometimes you may want to retrieve results as flat values instead of record 
-blocks. You can do so by updating the statement to `'BLOCKS`:
-
-```Red
-odbc-update statement 'blocks
-odbc-insert statement "select a, b, c, d from cinema.show"
-== [a b c d]
-odbc-copy statement
-== [
-    [1 1 12:00 7]
-    [2 1 15:45 7]
-    [3 1 17:00 7]
-    [4 1 19:30 7]
-    [5 1 12:...
-```
-
-```Red
-odbc-update statement 'values
-odbc-insert statement "select * from cinema.show"
-== [a b c d]
-odbc-copy statement
-== [
-    1 1 12:00 7
-    2 1 15:45 7
-    3 1 17:00 7
-    4 1 19:30 7
-    5 1 12:..
-```
-
-```Red
-odbc-update statement 'maps
-odbc-insert statement "select * from cinema.show"
-== [a b c d]
-odbc-copy statement
-== [
-    #(a: 1 b: 1 c: 12:00 d: 7)
-    #(2: 1 b: 1 c: 15:45 d: 7)
-    #(3: 1 b: 1 c: 17:00 d: 7)
-    #(4: 1 b: 1 c: 19:30 d: 7)
-    #(5: 1 b: 1 c: 12:..
-```
-
-The default here is to return blocks of values.
-:warning: Not implemented yet!
-
 ## Statement Parameters
 You may already have noticed the use of statement parameters. To use them, 
 instead of just supplying a statement string supply a block to `odbc-insert`.
@@ -397,7 +315,7 @@ The datatypes supported so far are:
 
 - integer!
 - string!
-- binary!
+- :soon: binary!
 - :soon: logic!
 - :soon: time!
 - :soon: date!
