@@ -72,6 +72,9 @@ Red [
 
         param!: alias struct! [
             buffer      [byte-ptr!]
+            buffer-size [integer!]
+            column-size [integer!]
+            strlen-ind  [integer!]
         ]
 
         statement!: alias struct! [
@@ -463,9 +466,8 @@ Red [
             value       [red-value!]
             return:     [red-value!]
             /local
-                count io-type c-type sql-type digits column-size buffer-size
-                strlen-ind int-buffer bit-buffer red-str str-len bit result
-                float-buffer
+                result count io-type c-type sql-type digits
+                int-buffer float-buffer bit-buffer red-str str-len
         ][
             ODBC_DEBUG ["BIND-PARAMETER" lf]
 
@@ -478,50 +480,52 @@ Red [
             SET_INT16(count         num)
             SET_INT16(io-type       SQL_PARAM_INPUT)
             SET_INT16(digits        0)
-            column-size:            0
-            strlen-ind:             0
+            param/column-size:      0
+            param/strlen-ind:       0
 
             switch TYPE_OF(value) [
                 TYPE_INTEGER [
                     SET_INT16(c-type    SQL_C_LONG)
                     SET_INT16(sql-type  SQL_INTEGER)
-                    buffer-size:        4
-                    param/buffer:       allocate-buffer buffer-size
+                    param/buffer-size:  4
+                    param/buffer:       allocate-buffer param/buffer-size
                     int-buffer:         as pointer! [integer!] param/buffer
                     int-buffer/value:   integer/get as red-value! value
                 ]
                 TYPE_FLOAT [
                     SET_INT16(c-type    SQL_C_DOUBLE)
                     SET_INT16(sql-type  SQL_DOUBLE)
-                    buffer-size:        8
-                    param/buffer:       allocate-buffer buffer-size
+                    param/buffer-size:  8
+                    param/buffer:       allocate-buffer param/buffer-size
                     float-buffer:       as pointer! [float!] param/buffer
                     float-buffer/value: float/get as red-value! value
                 ]
                 TYPE_STRING [
                     SET_INT16(c-type    SQL_C_WCHAR)
-                    SET_INT16(sql-type  SQL_WVARCHAR)
+                    SET_INT16(sql-type  SQL_VARCHAR)
                     red-str:            as red-string! value
                     str-len:            string/rs-length? red-str
-                    buffer-size:        str-len + 1 << 1
-                    param/buffer:       as byte-ptr! unicode/to-utf16 red-str
-                    column-size:        SQL_NTS
-                    strlen-ind:         SQL_NTS
+                    param/strlen-ind:   str-len     << 1
+                    param/column-size:  str-len + 1 << 1
+                    param/buffer-size:  str-len + 1 << 1
+                    param/buffer:       allocate-buffer param/buffer-size
+                    copy-memory param/buffer as byte-ptr! unicode/to-utf16 red-str param/buffer-size
+
                 ]
                 TYPE_LOGIC [
                     SET_INT16(c-type    SQL_C_LONG)
                     SET_INT16(sql-type  SQL_BIT)
-                    buffer-size:        4
-                    param/buffer:       allocate-buffer buffer-size
+                    param/buffer-size:  4
+                    param/buffer:       allocate-buffer param/buffer-size
                     int-buffer:         as pointer! [integer!] param/buffer
                     int-buffer/value:   either logic/get as red-value! value [1] [0]
                 ]
                 default [
                     SET_INT16(c-type    SQL_C_DEFAULT)
                     SET_INT16(sql-type  SQL_NULL_DATA)
-                    buffer-size:        0
+                    param/buffer-size:  0
                     param/buffer:       null
-                    strlen-ind:         SQL_NULL_DATA
+                    param/strlen-ind:   SQL_NULL_DATA
                 ]
             ]
 
@@ -530,11 +534,11 @@ Red [
                                                io-type
                                                c-type
                                                sql-type
-                                               column-size
+                                               param/column-size
                                                digits
                                                param/buffer
-                                               buffer-size
-                                              :strlen-ind                       ODBC_DEBUG ["SQLBindParameter " result lf]
+                                               param/buffer-size
+                                              :param/strlen-ind                 ODBC_DEBUG ["SQLBindParameter " result lf]
                                                                                 if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT hstmt)]
             as red-value! logic/box true
         ]
