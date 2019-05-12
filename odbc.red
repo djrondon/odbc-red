@@ -334,7 +334,7 @@ Red [
                 result = SQL_NO_DATA
            ]
 
-            return as red-value! logic/box true
+            as red-value! logic/box true
         ]
 
 
@@ -389,9 +389,9 @@ Red [
                 SET_INT16(direction SQL_FETCH_NEXT)
 
                 result = SQL_NO_DATA
-           ]
+            ]
 
-            return as red-value! logic/box true
+            as red-value! logic/box true
         ]
 
 
@@ -449,7 +449,7 @@ Red [
                 ]
             ]
 
-            return as red-value! logic/box true
+            as red-value! logic/box true
         ]
 
 
@@ -465,6 +465,7 @@ Red [
             /local
                 count io-type c-type sql-type digits column-size buffer-size
                 strlen-ind int-buffer bit-buffer red-str str-len bit result
+                float-buffer
         ][
             ODBC_DEBUG ["BIND-PARAMETER" lf]
 
@@ -489,6 +490,14 @@ Red [
                     int-buffer:         as pointer! [integer!] param/buffer
                     int-buffer/value:   integer/get as red-value! value
                 ]
+                TYPE_FLOAT [
+                    SET_INT16(c-type    SQL_C_DOUBLE)
+                    SET_INT16(sql-type  SQL_DOUBLE)
+                    buffer-size:        8
+                    param/buffer:       allocate-buffer buffer-size
+                    float-buffer:       as pointer! [float!] param/buffer
+                    float-buffer/value: float/get as red-value! value
+                ]
                 TYPE_STRING [
                     SET_INT16(c-type    SQL_C_WCHAR)
                     SET_INT16(sql-type  SQL_WVARCHAR)
@@ -500,13 +509,12 @@ Red [
                     strlen-ind:         SQL_NTS
                 ]
                 TYPE_LOGIC [
-                    SET_INT16(c-type    SQL_C_BIT)
+                    SET_INT16(c-type    SQL_C_LONG)
                     SET_INT16(sql-type  SQL_BIT)
-                    bit:                logic/get as red-value! value
-                    buffer-size:        1
+                    buffer-size:        4
                     param/buffer:       allocate-buffer buffer-size
-                    bit-buffer:         param/buffer
-                    bit-buffer/0:       either bit [#"^(00)"] [#"^(01)"]
+                    int-buffer:         as pointer! [integer!] param/buffer
+                    int-buffer/value:   either logic/get as red-value! value [1] [0]
                 ]
                 default [
                     SET_INT16(c-type    SQL_C_DEFAULT)
@@ -677,8 +685,8 @@ Red [
                     column/buffer-size:     8
                 ]
                 SQL_BIT [
-                    SET_INT16(column/c-type SQL_C_CHAR)
-                    column/buffer-size:     4                                   ;-- FIXE: hardcoded value
+                    SET_INT16(column/c-type SQL_C_LONG)
+                    column/buffer-size:     4
                 ]
                 SQL_TINYINT
                 SQL_BIGINT [
@@ -850,7 +858,8 @@ Red [
                     float/make-in row float-ptr/int2 float-ptr/int1
                 ]
                 SQL_BIT [
-                    logic/make-in row all [column/buffer/0 = #"^(8C)" column/buffer/1 = #"^(31)"]
+                    integer-ptr: as [pointer! [integer!]] column/buffer
+                    logic/make-in row not zero? integer-ptr/value
                 ]
                 SQL_TINYINT
                 SQL_BIGINT [
@@ -1071,7 +1080,7 @@ Red [
                                       null
                                       0
                                      :text-length                               print ["SQLGetDiagRecord " result lf]
-                                                                                unless result = SQL_SUCCESS [exit]
+                                                                                if result = SQL_ERROR [exit]
                 buffer-length: (text-length + 1) << 1
                 message:        as c-string! allocate-buffer buffer-length
 
@@ -1083,7 +1092,7 @@ Red [
                                       as byte-ptr! message
                                       buffer-length
                                      :text-length                               print ["SQLGetDiagRecord " result " " state " " native-error " " message " " text-length lf]
-                                                                                unless result = SQL_SUCCESS [exit]
+                                                                                if result = SQL_ERROR [exit]
                 result = SQL_NO_DATA
             ]
         ]
