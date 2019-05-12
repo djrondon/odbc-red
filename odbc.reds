@@ -202,6 +202,9 @@ sqlsmallint!: alias struct! [lo [byte!] hi [byte!]]
 #define SQL_C_WCHAR                     SQL_WCHAR
 #define SQL_C_LONG                      SQL_INTEGER
 #define SQL_C_DOUBLE                    SQL_DOUBLE
+#define SQL_C_DATE                      SQL_DATE
+#define SQL_C_TIME                      SQL_TIME
+#define SQL_C_TIMESTAMP                 SQL_TIMESTAMP
 #define SQL_C_TYPE_DATE                 SQL_TYPE_DATE
 #define SQL_C_TYPE_TIME                 SQL_TYPE_TIME
 #define SQL_C_TYPE_TIMESTAMP            SQL_TYPE_TIMESTAMP
@@ -233,8 +236,8 @@ SQL_DATE_STRUCT: alias struct! [
 ]
 
 SQL_TIME_STRUCT: alias struct! [
-    hourr_lo    [byte!]
-    hourr_hi    [byte!]
+    hour_lo     [byte!]
+    hour_hi     [byte!]
     minute_lo   [byte!]
     minute_hi   [byte!]
     second_lo   [byte!]
@@ -250,8 +253,8 @@ SQL_TIMESTAMP_STRUCT: alias struct! [
     month_hi    [byte!]
     day_lo      [byte!]
     day_hi      [byte!]
-    hourr_lo    [byte!]
-    hourr_hi    [byte!]
+    hour_lo     [byte!]
+    hour_hi     [byte!]
     minute_lo   [byte!]
     minute_hi   [byte!]
     second_lo   [byte!]
@@ -319,14 +322,14 @@ SQLCloseCursor: "SQLCloseCursor" [
 
 SQLColumns: "SQLColumnsW" [
     statement               [sql-handle!]
-    catalog-name            [c-string!]             
-    name-length-1           [sqlsmallint! value]    
-    schema-name             [c-string!]             
-    name-length-2           [sqlsmallint! value]    
-    table-name              [c-string!]             
-    name-length-3           [sqlsmallint! value]    
-    column-name             [c-string!]             
-    name-length-4           [sqlsmallint! value]    
+    catalog-name            [c-string!]
+    name-length-1           [sqlsmallint! value]
+    schema-name             [c-string!]
+    name-length-2           [sqlsmallint! value]
+    table-name              [c-string!]
+    name-length-3           [sqlsmallint! value]
+    column-name             [c-string!]
+    name-length-4           [sqlsmallint! value]
     return:                 [integer!]
 ]
 
