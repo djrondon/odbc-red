@@ -313,12 +313,13 @@ odbc-copy statement
 
 The datatypes supported so far are:
 
-- integer!
 - string!
-- :soon: binary!
-- :soon: logic!
-- :soon: time!
+- integer!
+- float!
+- logic!
 - :soon: date!
+- :soon: time!
+- :soon: binary!
 
 ## Datatype Conversions
 If the built in automatic type conversion for data retrieval doesn't fit your
