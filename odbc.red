@@ -669,14 +669,14 @@ Red [
                     SET_INT16(column/c-type SQL_C_WCHAR)
                     column/buffer-size:     (column/column-size + 1) << 1
                 ]
-                SQL_DECIMAL [
-                    print ["SQL_DECIMAL dataype not supported." lf]
-                ]
-                SQL_NUMERIC [
-                    print ["SQL_DECIMAL dataype not supported." lf]
-                   ;SET_INT16(column/c-type SQL_C_LONG)
-                   ;column/buffer-size:    4
-                ]
+               ;SQL_DECIMAL [
+               ;    print ["SQL_DECIMAL dataype not supported." lf]
+               ;]
+               ;SQL_NUMERIC [
+               ;    print ["SQL_NUMERIC dataype not supported." lf]
+               ;   ;SET_INT16(column/c-type SQL_C_LONG)
+               ;   ;column/buffer-size:    4
+               ;]
                 SQL_SMALLINT
                 SQL_INTEGER [
                     SET_INT16(column/c-type SQL_C_LONG)
@@ -692,9 +692,12 @@ Red [
                     SET_INT16(column/c-type SQL_C_LONG)
                     column/buffer-size:     4
                 ]
-                SQL_TINYINT
+                SQL_TINYINT [
+                    SET_INT16(column/c-type SQL_C_LONG)
+                    column/buffer-size:     4
+                ]
                 SQL_BIGINT [
-                    print ["SQL_TINYINT/BIGINT dataypes not supported." lf]
+                    print ["SQL_BIGINT dataype not supported." lf]
                 ]
                 SQL_BINARY
                 SQL_VARBINARY
@@ -874,7 +877,10 @@ Red [
                     integer-ptr: as [pointer! [integer!]] column/buffer
                     logic/make-in row not zero? integer-ptr/value
                 ]
-                SQL_TINYINT
+                SQL_TINYINT [
+                    integer-ptr: as [pointer! [integer!]] column/buffer
+                    integer/make-in row integer-ptr/value
+                ]
                 SQL_BIGINT [
                     none/make-in row
                 ]
