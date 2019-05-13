@@ -701,36 +701,44 @@ Red [
                 SQL_LONGVARBINARY [
                     print ["SQL_((LONG)VAR)BINARY dataypes not supported." lf]
                 ]
-               ;SQL_DATE
-               ;SQL_TYPE_DATE [
-               ;    ;-- Error 22007, Invalid datetime format 107
-               ;    SET_INT16(column/c-type SQL_C_TYPE_DATE)
-               ;    ODBC_DEBUG [size? SQL_DATE_STRUCT " " SQL_C_TYPE_DATE " " column/datatype ", "]
-               ;    column/buffer-size:    size? SQL_DATE_STRUCT
-               ;]
-                SQL_DATE [
-                    SET_INT16(column/c-type SQL_DATE)
-                    column/buffer-size:     size? SQL_DATE_STRUCT
-                ]
+;               SQL_DATE [
+;                   SET_INT16(column/c-type SQL_DATE)
+;                   column/buffer-size:     size? SQL_DATE_STRUCT
+;               ]
+;               SQL_TYPE_DATE [
+;                   SET_INT16(column/c-type SQL_C_TYPE_DATE)
+;                   column/buffer-size:     size? SQL_DATE_STRUCT
+;               ]
+                SQL_DATE
                 SQL_TYPE_DATE [
-                    SET_INT16(column/c-type SQL_C_TYPE_DATE)
-                    column/buffer-size:     size? SQL_DATE_STRUCT
+                    SET_INT16(column/c-type SQL_C_CHAR)
+                    column/buffer-size:     11
                 ]
-                SQL_TIME [
-                    SET_INT16(column/c-type SQL_TIME)
-                    column/buffer-size:     size? SQL_TIME_STRUCT
-                ]
+;               SQL_TIME [
+;                   SET_INT16(column/c-type SQL_TIME)
+;                   column/buffer-size:     size? SQL_TIME_STRUCT
+;               ]
+;               SQL_TYPE_TIME [
+;                   SET_INT16(column/c-type SQL_C_TYPE_TIME)
+;                   column/buffer-size:     size? SQL_TIME_STRUCT
+;               ]
+                SQL_TIME
                 SQL_TYPE_TIME [
-                    SET_INT16(column/c-type SQL_C_TYPE_TIME)
-                    column/buffer-size:     size? SQL_TIME_STRUCT
+                    SET_INT16(column/c-type SQL_C_CHAR)
+                    column/buffer-size:     9
                 ]
-                SQL_TIMESTAMP [
-                    SET_INT16(column/c-type SQL_TIMESTAMP)
-                    column/buffer-size:     size? SQL_TIMESTAMP_STRUCT
-                ]
+;               SQL_TIMESTAMP [
+;                   SET_INT16(column/c-type SQL_TIMESTAMP)
+;                   column/buffer-size:     size? SQL_TIMESTAMP_STRUCT
+;               ]
+;               SQL_TYPE_TIMESTAMP [
+;                   SET_INT16(column/c-type SQL_C_TYPE_TIMESTAMP)
+;                   column/buffer-size:     size? SQL_TIMESTAMP_STRUCT
+;               ]
+                SQL_TIMESTAMP
                 SQL_TYPE_TIMESTAMP [
-                    SET_INT16(column/c-type SQL_C_TYPE_TIMESTAMP)
-                    column/buffer-size:     size? SQL_TIMESTAMP_STRUCT
+                    SET_INT16(column/c-type SQL_C_CHAR)
+                    column/buffer-size:     20
                 ]
                ;SQL_INTERVAL_MONTH
                ;SQL_INTERVAL_YEAR
@@ -883,45 +891,60 @@ Red [
                 SQL_LONGVARBINARY [
                     none/make-in row
                 ]
+;               SQL_DATE
+;               SQL_TYPE_DATE [
+;                   date-ptr: as SQL_DATE_STRUCT column/buffer
+;
+;                   dy: (as integer! date-ptr/year_hi  ) << 8 or (as integer! date-ptr/year_lo  )
+;                   dm: (as integer! date-ptr/month_hi ) << 8 or (as integer! date-ptr/month_lo )
+;                   dd: (as integer! date-ptr/day_hi   ) << 8 or (as integer! date-ptr/day_lo   )
+;
+;                   red-date: date/make-in row 0 0 0
+;                   date/set-all red-date dy dm dd 0 0 0 0
+;
+;                   red-date/date: red-date/date and FFFEFFFFh                  ;-- clear time flag
+;               ]
                 SQL_DATE
                 SQL_TYPE_DATE [
-                    date-ptr: as SQL_DATE_STRUCT column/buffer
-
-                    dy: (as integer! date-ptr/year_hi  ) << 8 or (as integer! date-ptr/year_lo  )
-                    dm: (as integer! date-ptr/month_hi ) << 8 or (as integer! date-ptr/month_lo )
-                    dd: (as integer! date-ptr/day_hi   ) << 8 or (as integer! date-ptr/day_lo   )
-
-                    red-date: date/make-in row 0 0 0
-                    date/set-all red-date dy dm dd 0 0 0 0
-
-                    red-date/date: red-date/date and FFFEFFFFh                  ;-- clear time flag
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind row UTF-8
                 ]
+;               SQL_TIME
+;               SQL_TYPE_TIME [
+;                   time-ptr: as SQL_TIME_STRUCT column/buffer
+;
+;                   th: (as integer! time-ptr/hour_hi  ) << 8 or (as integer! time-ptr/hour_lo  )
+;                   tm: (as integer! time-ptr/minute_hi) << 8 or (as integer! time-ptr/minute_lo)
+;                   ts: (as integer! time-ptr/second_hi) << 8 or (as integer! time-ptr/second_lo)
+;                   tf:  0
+;
+;                   red-time: time/make-in row 0 0
+;                   red-time/time: (3600.0 * as float! th) + (60.0 * as float! tm) + (as float! ts)
+;               ]
                 SQL_TIME
                 SQL_TYPE_TIME [
-                    time-ptr: as SQL_TIME_STRUCT column/buffer
-
-                    th: (as integer! time-ptr/hour_hi  ) << 8 or (as integer! time-ptr/hour_lo  )
-                    tm: (as integer! time-ptr/minute_hi) << 8 or (as integer! time-ptr/minute_lo)
-                    ts: (as integer! time-ptr/second_hi) << 8 or (as integer! time-ptr/second_lo)
-                    tf:  0
-
-                    red-time: time/make-in row 0 0
-                    red-time/time: (3600.0 * as float! th) + (60.0 * as float! tm) + (as float! ts)
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind row UTF-8
                 ]
+;               SQL_TIMESTAMP
+;               SQL_TYPE_TIMESTAMP [
+;                   timestamp-ptr: as SQL_TIMESTAMP_STRUCT column/buffer
+;
+;                   dy: (as integer! timestamp-ptr/year_hi  ) << 8 or (as integer! timestamp-ptr/year_lo  )
+;                   dm: (as integer! timestamp-ptr/month_hi ) << 8 or (as integer! timestamp-ptr/month_lo )
+;                   dd: (as integer! timestamp-ptr/day_hi   ) << 8 or (as integer! timestamp-ptr/day_lo   )
+;                   th: (as integer! timestamp-ptr/hour_hi  ) << 8 or (as integer! timestamp-ptr/hour_lo  )
+;                   tm: (as integer! timestamp-ptr/minute_hi) << 8 or (as integer! timestamp-ptr/minute_lo)
+;                   ts: (as integer! timestamp-ptr/second_hi) << 8 or (as integer! timestamp-ptr/second_lo)
+;                   tf:  0
+;
+;                   red-date: date/make-in row 0 0 0
+;                   date/set-all red-date dy dm dd th tm ts tf
+;               ]
                 SQL_TIMESTAMP
                 SQL_TYPE_TIMESTAMP [
-                    timestamp-ptr: as SQL_TIMESTAMP_STRUCT column/buffer
-
-                    dy: (as integer! timestamp-ptr/year_hi  ) << 8 or (as integer! timestamp-ptr/year_lo  )
-                    dm: (as integer! timestamp-ptr/month_hi ) << 8 or (as integer! timestamp-ptr/month_lo )
-                    dd: (as integer! timestamp-ptr/day_hi   ) << 8 or (as integer! timestamp-ptr/day_lo   )
-                    th: (as integer! timestamp-ptr/hour_hi  ) << 8 or (as integer! timestamp-ptr/hour_lo  )
-                    tm: (as integer! timestamp-ptr/minute_hi) << 8 or (as integer! timestamp-ptr/minute_lo)
-                    ts: (as integer! timestamp-ptr/second_hi) << 8 or (as integer! timestamp-ptr/second_lo)
-                    tf:  0
-
-                    red-date: date/make-in row 0 0 0
-                    date/set-all red-date dy dm dd th tm ts tf
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind row UTF-8
                 ]
                ;SQL_INTERVAL_MONTH
                ;SQL_INTERVAL_YEAR
