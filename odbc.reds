@@ -198,6 +198,7 @@ sqlsmallint!: alias struct! [lo [byte!] hi [byte!]]
 #define SQL_C_DEFAULT                   99
 #define SQL_C_BIT                       SQL_BIT
 #define SQL_C_BINARY                    SQL_BINARY
+#define SQL_C_NUMERIC                   SQL_NUMERIC
 #define SQL_C_CHAR                      SQL_CHAR
 #define SQL_C_WCHAR                     SQL_WCHAR
 #define SQL_C_LONG                      SQL_INTEGER

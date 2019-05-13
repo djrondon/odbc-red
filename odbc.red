@@ -669,14 +669,11 @@ Red [
                     SET_INT16(column/c-type SQL_C_WCHAR)
                     column/buffer-size:     (column/column-size + 1) << 1
                 ]
-               ;SQL_DECIMAL [
-               ;    print ["SQL_DECIMAL dataype not supported." lf]
-               ;]
-               ;SQL_NUMERIC [
-               ;    print ["SQL_NUMERIC dataype not supported." lf]
-               ;   ;SET_INT16(column/c-type SQL_C_LONG)
-               ;   ;column/buffer-size:    4
-               ;]
+                SQL_DECIMAL
+                SQL_NUMERIC [
+                    SET_INT16(column/c-type SQL_C_CHAR)
+                    column/buffer-size:     128                                 ;-- FIXME: Why?
+                ]
                 SQL_SMALLINT
                 SQL_INTEGER [
                     SET_INT16(column/c-type SQL_C_LONG)
@@ -755,7 +752,7 @@ Red [
                     column/buffer-size:     (column/column-size + 1) << 1
                 ]
                 default [
-                    print ["Unknown dataype not supported." lf]
+                    print ["Unknown dataype " column/sql-type " not supported." lf]
                 ]
             ]
 
@@ -854,13 +851,10 @@ Red [
                     value: as c-string! column/buffer
                     string/load-in as c-string! column/buffer column/strlen-ind >> 1 row UTF-16LE
                 ]
-                SQL_DECIMAL [
-                    none/make-in row
-                ]
+                SQL_DECIMAL
                 SQL_NUMERIC [
-                ;   integer-ptr: as [pointer! [integer!]] column/buffer
-                ;   float/make-in row integer-ptr/value 0
-                    none/make-in row
+                    value: as c-string! column/buffer
+                    string/load-in as c-string! column/buffer column/strlen-ind row UTF-8
                 ]
                 SQL_SMALLINT
                 SQL_INTEGER [
