@@ -28,10 +28,10 @@ Red [
         ((as integer! int16/hi) << 8 or (as integer! int16/lo))
     ]
 
-    #define ODBC_DEBUG          comment
-    #define ODBC_DEBUG_BYTES    comment
-   ;#define ODBC_DEBUG          print
-   ;#define ODBC_DEBUG_BYTES    print-bytes
+   ;#define ODBC_DEBUG          comment
+   ;#define ODBC_DEBUG_BYTES    comment
+    #define ODBC_DEBUG          print
+    #define ODBC_DEBUG_BYTES    print-bytes
 
     #define REJECT(value) [if result = value]
 
@@ -1445,13 +1445,13 @@ context [
                 result: _catalog-statement statement/handle query
 
                 if block? result [                  
-                    cause-error 'user 'message reduce [rejoin ["cannot catalog " mold sql ": " mold result/error]]
+                    cause-error 'user 'message reduce [rejoin ["cannot catalog " mold sql ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
                 if block? result [                  
-                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result/error]]
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
                 ] 
             ]
 
@@ -1460,7 +1460,7 @@ context [
                     result: _prepare-statement statement/handle query
  
                     if block? result [                  
-                        cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold sql ": " mold result/error]]
+                        cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold sql ": " mold result]]
                     ]
 
                     statement/sql: value
@@ -1469,13 +1469,13 @@ context [
                 result: _execute-statement statement/handle query
 
                 if block? result [                  
-                    cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold sql ": " mold result/error]]
+                    cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold sql ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
                 if block? result [                  
-                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result/error]]
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
                 ]
             ]
         ]
@@ -1504,7 +1504,7 @@ context [
 		result: _fetch-statement statement/handle rows: copy []
         
         if block? result [                  
-            cause-error 'user 'message reduce [rejoin ["cannot fetch statement " mold sql ": " mold result/error]]
+            cause-error 'user 'message reduce [rejoin ["cannot fetch statement " mold sql ": " mold result]]
         ]
 
         new-line/all rows on
