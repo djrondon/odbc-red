@@ -13,6 +13,7 @@ Red/System [
 #switch OS [
 
 Windows [
+    #define KERNEL_LIBRARY "kernel32.dll"
     #define ODBC_LIBRARY "odbc32.dll"
     #define LIBC_LIBRARY "msvcrt.dll"
 ]
@@ -24,6 +25,25 @@ macOS [
 ]
 
 ]
+
+
+;--------------------------------------------------------------------- kernel --
+;
+
+#define ODBC_CP_UTF8               65001
+#define ODBC_MB_ERR_INVALID_CHARS      8
+
+#import [KERNEL_LIBRARY stdcall [
+    MultiByteToWideChar: "MultiByteToWideChar" [
+        code-page       [integer!]
+        flags           [integer!]
+        multi-str       [byte-ptr!]
+        multi-byte      [integer!]
+        wide-str        [byte-ptr!]
+        wide-size       [integer!]
+        return:         [integer!]
+    ]
+]]
 
 
 ;---------------------------------------------------------------- LIB_LIBRARY --

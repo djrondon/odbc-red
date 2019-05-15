@@ -28,12 +28,12 @@ Red [
         ((as integer! int16/hi) << 8 or (as integer! int16/lo))
     ]
 
-   ;#define ODBC_DEBUG          comment
-   ;#define ODBC_DEBUG_BYTES    comment
-    #define ODBC_DEBUG          print
-    #define ODBC_DEBUG_BYTES    print-bytes
+    #define ODBC_DEBUG          comment
+    #define ODBC_DEBUG_BYTES    comment
+   ;#define ODBC_DEBUG          print
+   ;#define ODBC_DEBUG_BYTES    print-bytes
 
-    #define REJECT(value) [if result = value]
+    #define ODBC_REJECT(value)  [if result = value]
 
     odbc: context [
 
@@ -135,7 +135,7 @@ Red [
 
             ODBC_DEBUG ["SQLAllocHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_ENV null)) exit
             ]
 
@@ -148,7 +148,7 @@ Red [
 
             ODBC_DEBUG ["SQLSetEnvAttr " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
             ]
 
@@ -176,7 +176,7 @@ Red [
 
             ODBC_DEBUG ["SQLAllocHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
             ]
 
@@ -190,7 +190,7 @@ Red [
 
             ODBC_DEBUG ["SQLSetConnectAttr " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
 
@@ -210,7 +210,7 @@ Red [
 
             ODBC_DEBUG ["SQLDriverConnect " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
 
@@ -239,10 +239,10 @@ Red [
 
             ODBC_DEBUG ["SQLAllocHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
-            
+
             SET_RETURN((handle/box as integer! statement))
         ]
 
@@ -254,25 +254,44 @@ Red [
             holder      [red-handle!]
             sql         [red-block!]
             /local
-                statement query text result red-str
+                statement query result red-str red-len u8-str u8-len u16-str u16-len u16-size
         ][
             ODBC_DEBUG ["PREPARE-STATEMENT" lf]
 
-            statement: as statement! holder/value
+            statement:  as statement! holder/value
+            u8-len:     declare int-ptr!
+            u8-len/value: -1
+
+            query:      block/rs-head sql
+            red-str:    as red-string! query
+            u8-str:     as byte-ptr! unicode/to-utf8 red-str u8-len
+
+            u16-size:   MultiByteToWideChar ODBC_CP_UTF8
+                                            ODBC_MB_ERR_INVALID_CHARS
+                                            u8-str
+                                            -1 ;NTS
+                                            null
+                                            0
+
+            u16-str:    allocate u16-size << 1 ; null-char incl
+
+            u16-size:   MultiByteToWideChar ODBC_CP_UTF8
+                                            ODBC_MB_ERR_INVALID_CHARS
+                                            u8-str
+                                            -1 ;NTS
+                                            u16-str
+                                            u16-size
 
             ;-- prepare statement
             ;
-            query:      block/rs-head sql
-            red-str:    as red-string! query
-            text:       unicode/to-utf16 red-str
 
             result: result-of SQLPrepare statement/hstmt
-                                         as byte-ptr! text
-                                         string/rs-length? red-str
+                                         u16-str ;as byte-ptr! text
+                                         u16-size ;str-len
 
             ODBC_DEBUG ["SQLPrepare " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -316,10 +335,10 @@ Red [
                                                  description
                                                  buffer2-length
                                                  description-length
-                                                 
+
                 ODBC_DEBUG ["SQLDataSources " result lf]
 
-                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                     SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
                 ]
 
@@ -371,10 +390,10 @@ Red [
                                              attributes
                                              buffer2-length
                                              attributes-length
-                                             
+
                 ODBC_DEBUG ["SQLDrivers " result lf]
 
-                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                     SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
                 ]
 
@@ -420,10 +439,10 @@ Red [
                                                 null length
                                                 null length
                                                 null length
-                                                
+
                     ODBC_DEBUG ["SQLTables " result lf]
 
-                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                         SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
                     ]
                 ]
@@ -439,7 +458,7 @@ Red [
 
                     ODBC_DEBUG ["SQLColumns " result lf]
 
-                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                         SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
                     ]
                 ]
@@ -448,11 +467,11 @@ Red [
                     SET_INT16(all-types SQL_ALL_TYPES)
 
                     result: result-of SQLGetTypeInfo statement/hstmt
-                                                     all-types 
-                                                     
+                                                     all-types
+
                     ODBC_DEBUG ["SQLGetTypeInfo " result lf]
 
-                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                         SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
                     ]
                 ]
@@ -473,6 +492,7 @@ Red [
             /local
                 result count io-type c-type sql-type digits
                 int-buffer float-buffer bit-buffer red-str str-len
+                u8-str u8-len u16-str u16-len u16-size
         ][
             ODBC_DEBUG ["BIND-PARAMETER" lf]
 
@@ -481,6 +501,8 @@ Red [
             c-type:          declare sqlsmallint!
             sql-type:        declare sqlsmallint!
             digits:          declare sqlsmallint!
+            u8-len:          declare int-ptr!
+            u8-len/value:    -1
 
             SET_INT16(count         num)
             SET_INT16(io-type       SQL_PARAM_INPUT)
@@ -509,13 +531,29 @@ Red [
                     SET_INT16(c-type    SQL_C_WCHAR)
                     SET_INT16(sql-type  SQL_VARCHAR)
                     red-str:            as red-string! value
+                    u8-str:             as byte-ptr! unicode/to-utf8 red-str u8-len
                     str-len:            string/rs-length? red-str
-                    param/strlen-ind:   str-len     << 1
-                    param/column-size:  str-len + 1 << 1
-                    param/buffer-size:  str-len + 1 << 1
-                    param/buffer:       allocate-buffer param/buffer-size
-                    copy-memory param/buffer as byte-ptr! unicode/to-utf16 red-str param/buffer-size
 
+                    u16-size:           MultiByteToWideChar ODBC_CP_UTF8
+                                                            ODBC_MB_ERR_INVALID_CHARS
+                                                            u8-str
+                                                            -1 ;NTS
+                                                            null
+                                                            0
+
+                    u16-str:            allocate u16-size << 1 ; null-char incl
+
+                    u16-size:           MultiByteToWideChar ODBC_CP_UTF8
+                                                            ODBC_MB_ERR_INVALID_CHARS
+                                                            u8-str
+                                                            -1 ;NTS
+                                                            u16-str
+                                                            u16-size
+
+                    param/buffer:       u16-str
+                    param/buffer-size:  u16-size << 1
+                    param/column-size:  u16-size << 1
+                    param/strlen-ind:  (u16-size - 1) << 1
                 ]
                 TYPE_LOGIC [
                     SET_INT16(c-type    SQL_C_LONG)
@@ -544,10 +582,10 @@ Red [
                                                param/buffer
                                                param/buffer-size
                                               :param/strlen-ind
-                                              
+
             ODBC_DEBUG ["SQLBindParameter " result lf]
-            
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
             ]
 
@@ -601,7 +639,7 @@ Red [
 
             ODBC_DEBUG ["SQLExecute " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -646,7 +684,7 @@ Red [
 
             ODBC_DEBUG ["SQLDescribeCol " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
             ]
 
@@ -798,10 +836,10 @@ Red [
                                          column/buffer                      ;-- incl. null-termination
                                          column/buffer-size                 ;           -"-
                                         :column/strlen-ind
-                                        
+
             ODBC_DEBUG ["SQLBindCol " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
             ]
 
@@ -830,7 +868,7 @@ Red [
 
             ODBC_DEBUG ["SQLNumResultCols " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -840,10 +878,10 @@ Red [
             either zero? statement/columns-cnt [
                 result:     result-of SQLRowCount statement/hstmt
                                                  :rows
-                                                 
+
                 ODBC_DEBUG ["SQLRowCount " result lf]
-                
-                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+
+                ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                     SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
                 ]
 
@@ -1064,7 +1102,7 @@ Red [
 
             ODBC_DEBUG ["SQLCloseCursor " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -1075,7 +1113,7 @@ Red [
 
             ODBC_DEBUG ["SQLFreeStmt SQL_CLOSE " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -1083,21 +1121,21 @@ Red [
             ;
             SET_INT16(option SQL_UNBIND)
             result: result-of SQLFreeStmt statement/hstmt option
-            
+
             ODBC_DEBUG ["SQLFreeStmt SQL_UNBIND " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
             ;-- reset params
             ;
             SET_INT16(option SQL_RESET_PARAMS)
-            result: result-of SQLFreeStmt statement/hstmt option                
-            
+            result: result-of SQLFreeStmt statement/hstmt option
+
             ODBC_DEBUG ["SQLFreeStmt SQL_RESET_PARAMS " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -1129,7 +1167,7 @@ Red [
 
             ODBC_DEBUG ["SQLFreeHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
@@ -1155,7 +1193,7 @@ Red [
 
             ODBC_DEBUG ["SQLDisconnect " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE or SQL_STILL_EXECUTING)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE or SQL_STILL_EXECUTING)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
 
@@ -1164,7 +1202,7 @@ Red [
 
             ODBC_DEBUG ["SQLFreeHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
 
@@ -1187,7 +1225,7 @@ Red [
 
             ODBC_DEBUG ["SQLFreeHandle " result lf]
 
-            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
                 SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
             ]
 
@@ -1381,7 +1419,7 @@ context [
         odbc-init
 
         result: _list-sources sources: copy []
-        
+
         if block? result [
             cause-error 'user 'message reduce [rejoin ["cannot list sources: " mold result]]
         ]
@@ -1402,7 +1440,7 @@ context [
         odbc-init
 
         result: _list-drivers drivers: copy []
-        
+
         if block? result [
             cause-error 'user 'message reduce [rejoin ["cannot list drivers: " mold result]]
         ]
@@ -1444,22 +1482,22 @@ context [
             word! [ ;-- catalog --
                 result: _catalog-statement statement/handle query
 
-                if block? result [                  
+                if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot catalog " mold sql ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
-                if block? result [                  
+                if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
-                ] 
+                ]
             ]
 
             string! [ ;-- statement --
                 unless same? statement/sql value [                              ;-- prepare new statement
                     result: _prepare-statement statement/handle query
- 
-                    if block? result [                  
+
+                    if block? result [
                         cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold sql ": " mold result]]
                     ]
 
@@ -1468,13 +1506,13 @@ context [
 
                 result: _execute-statement statement/handle query
 
-                if block? result [                  
+                if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold sql ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
-                if block? result [                  
+                if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
                 ]
             ]
@@ -1502,8 +1540,8 @@ context [
         ]
 
 		result: _fetch-statement statement/handle rows: copy []
-        
-        if block? result [                  
+
+        if block? result [
             cause-error 'user 'message reduce [rejoin ["cannot fetch statement " mold sql ": " mold result]]
         ]
 
@@ -1531,7 +1569,7 @@ context [
                 ]
 
                 result: _close-connection connection/handle
-            
+
                 if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot close connection: " mold result]]
                 ]
