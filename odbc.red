@@ -1378,11 +1378,15 @@ context [
     set 'odbc-sources function [
         "Returns block of ODBC datasource/description pairs"
     ][
+        odbc-init
+
         result: _list-sources sources: copy []
         
         if block? result [
             cause-error 'user 'message reduce [rejoin ["cannot list sources: " mold result]]
         ]
+
+        odbc-free
 
         new-line/skip/all sources on 2
     ]
@@ -1395,6 +1399,8 @@ context [
         "Returns block of ODBC driver-description/attributes pairs"
         /local desc attrs attr
     ][
+        odbc-init
+
         result: _list-drivers drivers: copy []
         
         if block? result [
@@ -1411,6 +1417,8 @@ context [
 
             keep reduce [desc attrs]
         ]]
+
+        odbc-free
 
         new-line/skip/all drivers on 2
     ]
@@ -1527,6 +1535,8 @@ context [
                 if block? result [
                     cause-error 'user 'message reduce [rejoin ["cannot close connection: " mold result]]
                 ]
+
+                odbc-free
 
                 clear connection/statements
             ]
