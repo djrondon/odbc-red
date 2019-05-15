@@ -421,7 +421,7 @@ SQLFreeStmt: "SQLFreeStmt" [
     return:                 [integer!]
 ]
 
-SQLGetDiagRec: "SQLGetDiagRec"     [
+SQLGetDiagRec: "SQLGetDiagRecW" [
     type                    [integer!]
     handle                  [sql-handle!]
     record                  [integer!]

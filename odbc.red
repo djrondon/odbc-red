@@ -33,10 +33,7 @@ Red [
    ;#define ODBC_DEBUG          print
    ;#define ODBC_DEBUG_BYTES    print-bytes
 
-    #define DESCRIBE_ERROR(handle value) [
-        diagnose-error handle value
-        return as red-value! logic/box false
-    ]
+    #define REJECT(value) [if result = value]
 
     odbc: context [
 
@@ -45,8 +42,6 @@ Red [
 
         environment!: alias struct! [
             henv        [sql-handle!]
-            conn-cnt    [integer!]                                              ;-- if the number of open connections reaches zero,
-                                                                                ;   the environment handle can be closed
         ]
 
         environment: declare environment!
@@ -123,34 +118,41 @@ Red [
         ;
 
         open-environment: func [
-            return:    [logic!]
             /local
                 result
         ][
             ODBC_DEBUG ["OPEN-ENVIRONMENT" lf]
 
-            unless environment/henv = null [return true]
+            unless environment/henv = null [
+                SET_RETURN((handle/box as integer! environment)) exit
+            ]
 
-            ;-- Allocate an environment handle
+            ;-- allocate environment handle
             ;
             result: result-of SQLAllocHandle SQL_HANDLE_ENV
                                              null
-                                             as byte-ptr! :environment/henv     ODBC_DEBUG ["SQLAllocHandle " result lf]
-                                                                                if result = SQL_ERROR [
-                                                                                    diagnose-error SQL_HANDLE_ENV environment/henv
-                                                                                    return false
-                                                                                ]
+                                             as byte-ptr! :environment/henv
+
+            ODBC_DEBUG ["SQLAllocHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_ENV null)) exit
+            ]
+
             ;-- set SQL_ATTR_ODBC_VERSION environment attribute.
             ;
             result: result-of SQLSetEnvAttr environment/henv
                                             SQL_ATTR_ODBC_VERSION
                                             SQL_OV_ODBC2
-                                            0                                   ODBC_DEBUG ["SQLSetEnvAttr " result lf]
-                                                                                if result = SQL_ERROR [
-                                                                                    diagnose-error SQL_HANDLE_ENV environment/henv
-                                                                                    return false
-                                                                                ]
-            return true
+                                            0
+
+            ODBC_DEBUG ["SQLSetEnvAttr " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
+            ]
+
+            SET_RETURN((handle/box as integer! environment))
         ]
 
 
@@ -158,79 +160,61 @@ Red [
         ;
 
         open-connection: func [
-            datasource [red-string!]
-            return:    [red-value!]
+            datasource  [red-string!]
             /local
-                connection result in-conn len1 [integer!] cstr [c-string!]
-                out-conn sz2 len2 [integer!] length-1 length-2 length-3
+                connection result input length
         ][
             ODBC_DEBUG ["OPEN-CONNECTION" lf]
 
-            ;-- open environment?
-            ;
-            if environment/henv = null [
-                open-environment
-            ]
-
-            ;-- Allocate a connection handle
+            ;-- allocate connection handle
             ;
             connection: as connection! allocate-buffer size? connection!
 
             result: result-of SQLAllocHandle SQL_HANDLE_DBC
                                              environment/henv
-                                             as byte-ptr! :connection/hdbc      ODBC_DEBUG ["SQLAllocHandle " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_ENV environment/henv)]
+                                             as byte-ptr! :connection/hdbc
+
+            ODBC_DEBUG ["SQLAllocHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
+            ]
+
             ;-- set SQL_ATTR_LOGIN_TIMEOUT connection attribute.
             ;
             result: result-of SQLSetConnectAttr connection/hdbc
                                                 SQL_ATTR_LOGIN_TIMEOUT
                                                 5                               ;-- FIXME: hardcoded value
-                                                SQL_IS_INTEGER                  ODBC_DEBUG ["SQLSetConnectAttr " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+                                                SQL_IS_INTEGER
 
-            ;-- Connect to driver
+
+            ODBC_DEBUG ["SQLSetConnectAttr " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+
+            ;-- connect to driver
             ;
-            in-conn: unicode/to-utf16 datasource
-            len1: string/rs-length? datasource
-
-            sz2:  4096
-            out-conn: make-c-string sz2
-            len2: 0
+            input:  unicode/to-utf16 datasource
+            length: string/rs-length? datasource
 
             result: result-of SQLDriverConnect connection/hdbc
                                                null
-                                               as byte-ptr! in-conn
-                                               len1
-                                               as byte-ptr! out-conn
-                                               sz2
-                                               :len2
-                                               SQL_DRIVER_NOPROMPT              ODBC_DEBUG ["SQLDriverConnect " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+                                               as byte-ptr! input
+                                               length
+                                               null
+                                               0
+                                               null
+                                               SQL_DRIVER_NOPROMPT
 
-            ;-- alternative simpler version with SQLConnect
-            ;
-            comment [
-                length-1: declare sqlsmallint!
-                length-2: declare sqlsmallint!
-                length-3: declare sqlsmallint!
+            ODBC_DEBUG ["SQLDriverConnect " result lf]
 
-                SET_INT16(length-1 (string/rs-length? datasource))
-                SET_INT16(length-2 0)
-                SET_INT16(length-3 0)
-
-                result: result-of SQLConnect connection/hdbc
-                                            in-conn
-                                            length-1
-                                            null
-                                            length-2
-                                            null
-                                            length-3                               ODBC_DEBUG ["SQLConnect " result lf]
-                                                                                    if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
             ]
 
-            environment/conn-cnt: environment/conn-cnt + 1
-
-            as red-value! handle/box as integer! connection
+            SET_RETURN((handle/box as integer! connection))
         ]
 
 
@@ -239,7 +223,6 @@ Red [
 
         open-statement: function [
             holder      [red-handle!]
-            return:     [red-value!]
             /local
                 connection statement result
         ][
@@ -248,13 +231,19 @@ Red [
             connection: as connection! holder/value
             statement:  as statement!  allocate-buffer size? statement!
 
-            ;-- Allocate a statement handle
+            ;-- allocate statement handle
             ;
             result: result-of SQLAllocHandle SQL_HANDLE_STMT
                                              connection/hdbc
-                                             as byte-ptr! :statement/hstmt      ODBC_DEBUG ["SQLAllocHandle " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
-            as red-value! handle/box as integer! statement
+                                             as byte-ptr! :statement/hstmt
+
+            ODBC_DEBUG ["SQLAllocHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+            
+            SET_RETURN((handle/box as integer! statement))
         ]
 
 
@@ -264,7 +253,6 @@ Red [
         prepare-statement: func [
             holder      [red-handle!]
             sql         [red-block!]
-            return:     [red-value!]
             /local
                 statement query text result red-str
         ][
@@ -272,15 +260,23 @@ Red [
 
             statement: as statement! holder/value
 
-            query: block/rs-head sql
-            red-str: as red-string! query
-            text: unicode/to-utf16 red-str
+            ;-- prepare statement
+            ;
+            query:      block/rs-head sql
+            red-str:    as red-string! query
+            text:       unicode/to-utf16 red-str
 
             result: result-of SQLPrepare statement/hstmt
                                          as byte-ptr! text
-                                         string/rs-length? red-str              ODBC_DEBUG ["SQLPrepare " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
-            as red-value! logic/box true
+                                         string/rs-length? red-str
+
+            ODBC_DEBUG ["SQLPrepare " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -289,19 +285,12 @@ Red [
 
         list-sources: func [
             sources     [red-block!]
-            return:     [red-value!]
             /local
                 direction result
                 server-name server-name-length buffer1-length
                 description description-length buffer2-length
         ][
             ODBC_DEBUG ["LIST-SOURCES" lf]
-
-            ;-- open environment?
-            ;
-            if environment/henv = null [
-                open-environment
-            ]
 
             ;-- list sources
             ;
@@ -326,8 +315,13 @@ Red [
                                                  server-name-length
                                                  description
                                                  buffer2-length
-                                                 description-length             ODBC_DEBUG ["SQLDataSources " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_ENV environment/henv)]
+                                                 description-length
+                                                 
+                ODBC_DEBUG ["SQLDataSources " result lf]
+
+                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
+                ]
 
                 string/load-in as c-string! server-name GET_INT16(server-name-length) sources UTF-16LE
                 string/load-in as c-string! description GET_INT16(description-length) sources UTF-16LE
@@ -335,9 +329,9 @@ Red [
                 SET_INT16(direction SQL_FETCH_NEXT)
 
                 result = SQL_NO_DATA
-           ]
+            ]
 
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -346,19 +340,12 @@ Red [
 
         list-drivers: func [
             drivers     [red-block!]
-            return:     [red-value!]
             /local
                 direction result
                 description description-length buffer1-length
                 attributes  attributes-length  buffer2-length
         ][
             ODBC_DEBUG ["LIST-DRIVERS" lf]
-
-            ;-- open environment?
-            ;
-            if environment/henv = null [
-                open-environment
-            ]
 
             ;-- list drivers
             ;
@@ -383,8 +370,13 @@ Red [
                                              description-length
                                              attributes
                                              buffer2-length
-                                             attributes-length                  ODBC_DEBUG ["SQLDrivers " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_ENV environment/henv)]
+                                             attributes-length
+                                             
+                ODBC_DEBUG ["SQLDrivers " result lf]
+
+                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
+                ]
 
                 string/load-in as c-string! description GET_INT16(description-length) drivers UTF-16LE
                 string/load-in as c-string! attributes  GET_INT16( attributes-length) drivers UTF-16LE
@@ -394,7 +386,7 @@ Red [
                 result = SQL_NO_DATA
             ]
 
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -408,7 +400,6 @@ Red [
         catalog-statement: func [
             holder      [red-handle!]
             catalog     [red-block!]
-            return:     [red-value!]
             /local
                 connection statement entity word sym all-types length result
         ][
@@ -428,8 +419,13 @@ Red [
                                                 null length
                                                 null length
                                                 null length
-                                                null length                     ODBC_DEBUG ["SQLTables " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+                                                null length
+                                                
+                    ODBC_DEBUG ["SQLTables " result lf]
+
+                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                        SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+                    ]
                 ]
                 sym = _columns [
                     length: declare sqlsmallint!
@@ -439,20 +435,30 @@ Red [
                                                  null length
                                                  null length
                                                  null length
-                                                 null length                    ODBC_DEBUG ["SQLColumns " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+                                                 null length
+
+                    ODBC_DEBUG ["SQLColumns " result lf]
+
+                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                        SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+                    ]
                 ]
                 sym = _types [
                     all-types: declare sqlsmallint!
                     SET_INT16(all-types SQL_ALL_TYPES)
 
                     result: result-of SQLGetTypeInfo statement/hstmt
-                                                     all-types                  ODBC_DEBUG ["SQLGetTypeInfo " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+                                                     all-types 
+                                                     
+                    ODBC_DEBUG ["SQLGetTypeInfo " result lf]
+
+                    REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                        SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+                    ]
                 ]
             ]
 
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -464,7 +470,6 @@ Red [
             param       [param!]
             num         [integer!]
             value       [red-value!]
-            return:     [red-value!]
             /local
                 result count io-type c-type sql-type digits
                 int-buffer float-buffer bit-buffer red-str str-len
@@ -538,9 +543,15 @@ Red [
                                                digits
                                                param/buffer
                                                param/buffer-size
-                                              :param/strlen-ind                 ODBC_DEBUG ["SQLBindParameter " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT hstmt)]
-            as red-value! logic/box true
+                                              :param/strlen-ind
+                                              
+            ODBC_DEBUG ["SQLBindParameter " result lf]
+            
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
+            ]
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -550,7 +561,6 @@ Red [
         execute-statement: func [
             holder      [red-handle!]
             sql         [red-block!]
-            return:     [red-value!]
             /local
                 statement result value p param
         ][
@@ -585,9 +595,17 @@ Red [
                 p:     p     + 1
             ]
 
-            result: result-of SQLExecute statement/hstmt                        ODBC_DEBUG ["SQLExecute " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
-            as red-value! logic/box true
+            ;-- execute statement
+            ;
+            result: result-of SQLExecute statement/hstmt
+
+            ODBC_DEBUG ["SQLExecute " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -599,7 +617,6 @@ Red [
             column      [column!]
             num         [integer!]
             columns     [red-block!]
-            return:     [red-value!]
             /local
                 result count buffer-size name-length sql-type digits nullable
         ][
@@ -625,8 +642,14 @@ Red [
                                              sql-type
                                             :column/column-size
                                              digits
-                                             nullable                           ODBC_DEBUG ["SQLDescribeCol " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT hstmt)]
+                                             nullable
+
+            ODBC_DEBUG ["SQLDescribeCol " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
+            ]
+
             column/name-length: GET_INT16(name-length)
             column/sql-type:    GET_INT16(sql-type)
             column/digits:      GET_INT16(digits)
@@ -634,7 +657,7 @@ Red [
 
             string/load-in column/name column/name-length columns UTF-16LE
 
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -645,7 +668,6 @@ Red [
             hstmt       [sql-handle!]
             column      [column!]
             num         [integer!]
-            return:     [red-value!]
             /local
                 result count
         ][
@@ -775,9 +797,15 @@ Red [
                                          column/c-type
                                          column/buffer                      ;-- incl. null-termination
                                          column/buffer-size                 ;           -"-
-                                        :column/strlen-ind                  ODBC_DEBUG ["SQLBindCol " result lf]
-                                                                            if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT hstmt)]
-            as red-value! logic/box true
+                                        :column/strlen-ind
+                                        
+            ODBC_DEBUG ["SQLBindCol " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
+            ]
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -787,7 +815,6 @@ Red [
         describe-statement: func [
             holder      [red-handle!]
             columns     [red-block!]
-            return:     [red-value!]
             /local
                 statement result count c column rows
         ][
@@ -799,15 +826,26 @@ Red [
             statement:  as statement! holder/value
 
             result:     result-of SQLNumResultCols statement/hstmt
-                                                   as byte-ptr! count           ODBC_DEBUG ["SQLNumResultCols " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+                                                   as byte-ptr! count
+
+            ODBC_DEBUG ["SQLNumResultCols " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
             statement/columns-cnt:  GET_INT16(count)
             statement/columns:      as column! allocate-buffer statement/columns-cnt * size? column!
 
             either zero? statement/columns-cnt [
                 result:     result-of SQLRowCount statement/hstmt
-                                                 :rows                          ODBC_DEBUG ["SQLRowCount " result lf]
-                                                                                if result = SQL_ERROR [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+                                                 :rows
+                                                 
+                ODBC_DEBUG ["SQLRowCount " result lf]
+                
+                REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                    SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+                ]
 
                 integer/make-in columns rows
             ][
@@ -824,7 +862,7 @@ Red [
                 ]
             ]
 
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -978,7 +1016,6 @@ Red [
         fetch-statement: func [
             holder      [red-handle!]
             rows        [red-block!]
-            return:     [red-value!]
             /local
                 statement result c row column buffer datatype option
                 integer-ptr float-ptr date-ptr year month day buf
@@ -989,7 +1026,9 @@ Red [
             statement: as statement! holder/value
 
             until [
-                result: result-of SQLFetch statement/hstmt                      ODBC_DEBUG ["SQLFetch " result lf]
+                result: result-of SQLFetch statement/hstmt
+
+                ODBC_DEBUG ["SQLFetch " result lf]
 
                 switch result [
                     SQL_SUCCESS
@@ -1008,7 +1047,8 @@ Red [
                     ]
                     SQL_ERROR
                     SQL_INVALID_HANDLE
-                    SQL_STILL_EXECUTING [                                       DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)
+                    SQL_STILL_EXECUTING [
+                        SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
                     ]
                     SQL_NO_DATA [
                         ;-- no-op
@@ -1018,19 +1058,50 @@ Red [
                 result = SQL_NO_DATA
             ]
 
-            result: result-of SQLCloseCursor statement/hstmt                    ODBC_DEBUG ["SQLCloseCursor " result lf]
-                                                                                if any [result = SQL_ERROR
-                                                                                        result = SQL_INVALID_HANDLE] [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
+            ;-- close curser
+            ;
+            result: result-of SQLCloseCursor statement/hstmt
+
+            ODBC_DEBUG ["SQLCloseCursor " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            ;-- close statement
+            ;
             SET_INT16(option SQL_CLOSE)
-            result: result-of SQLFreeStmt statement/hstmt option                ODBC_DEBUG ["SQLFreeStmt SQL_CLOSE " result lf]
+            result: result-of SQLFreeStmt statement/hstmt option
 
+            ODBC_DEBUG ["SQLFreeStmt SQL_CLOSE " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            ;-- unbind statement
+            ;
             SET_INT16(option SQL_UNBIND)
-            result: result-of SQLFreeStmt statement/hstmt option                ODBC_DEBUG ["SQLFreeStmt SQL_UNBIND " result lf]
+            result: result-of SQLFreeStmt statement/hstmt option
+            
+            ODBC_DEBUG ["SQLFreeStmt SQL_UNBIND " result lf]
 
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            ;-- reset params
+            ;
             SET_INT16(option SQL_RESET_PARAMS)
-            result: result-of SQLFreeStmt statement/hstmt option                ODBC_DEBUG ["SQLFreeStmt SQL_RESET_PARAMS " result lf]
+            result: result-of SQLFreeStmt statement/hstmt option                
+            
+            ODBC_DEBUG ["SQLFreeStmt SQL_RESET_PARAMS " result lf]
 
-            as red-value! logic/box true
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -1039,11 +1110,11 @@ Red [
 
         close-statement: func [
             holder    [red-handle!]
-            return:   [red-value!]
             /local
                 statement result column
         ][
-                                                                                ODBC_DEBUG ["CLOSE-STATEMENT" lf]
+            ODBC_DEBUG ["CLOSE-STATEMENT" lf]
+
             statement:  as statement! holder/value
             column:     statement/columns
 
@@ -1054,11 +1125,17 @@ Red [
 
             free-buffer as byte-ptr! statement/columns
 
-            result: result-of SQLFreeHandle SQL_HANDLE_STMT statement/hstmt     ODBC_DEBUG ["SQLFreeHandle " result lf]
-                                                                                if any [result = SQL_ERROR
-                                                                                        result = SQL_INVALID_HANDLE] [DESCRIBE_ERROR(SQL_HANDLE_STMT statement/hstmt)]
-            free-buffer as byte-ptr!  statement
-            as red-value! logic/box true
+            result: result-of SQLFreeHandle SQL_HANDLE_STMT statement/hstmt
+
+            ODBC_DEBUG ["SQLFreeHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
+            ]
+
+            free-buffer as byte-ptr! statement
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -1067,27 +1144,33 @@ Red [
 
         close-connection: func [
             holder      [red-handle!]
-            return:     [red-value!]
             /local
                 connection result
         ][
-                                                                                ODBC_DEBUG ["CLOSE-CONNECTION" lf]
-            connection: as connection! holder/value
-            result: result-of SQLDisconnect connection/hdbc                     ODBC_DEBUG ["SQLDisconnect " result lf]
-                                                                                if any [result = SQL_ERROR
-                                                                                        result = SQL_INVALID_HANDLE
-                                                                                        result = SQL_STILL_EXECUTING] [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+            ODBC_DEBUG ["CLOSE-CONNECTION" lf]
 
-            result: result-of SQLFreeHandle SQL_HANDLE_DBC connection/hdbc      ODBC_DEBUG ["SQLFreeHandle " result lf]
-                                                                                if any [result = SQL_ERROR
-                                                                                        result = SQL_INVALID_HANDLE] [DESCRIBE_ERROR(SQL_HANDLE_DBC connection/hdbc)]
+            connection: as connection! holder/value
+
+            result: result-of SQLDisconnect connection/hdbc
+
+            ODBC_DEBUG ["SQLDisconnect " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE or SQL_STILL_EXECUTING)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+
+            result: result-of SQLFreeHandle SQL_HANDLE_DBC
+                                            connection/hdbc
+
+            ODBC_DEBUG ["SQLFreeHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+
             free-buffer as byte-ptr! connection
 
-            environment/conn-cnt: environment/conn-cnt - 1
-
-            if zero? environment/conn-cnt [close-environment]
-
-            as red-value! logic/box true
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -1095,15 +1178,22 @@ Red [
         ;
 
         close-environment: func [
-            return:     [red-value!]
             /local
                 result
         ][
-            result: result-of SQLFreeHandle SQL_HANDLE_ENV environment/henv     ODBC_DEBUG ["SQLFreeHandle " result lf]
-                                                                                if any [result = SQL_ERROR
-                                                                                        result = SQL_INVALID_HANDLE] [DESCRIBE_ERROR(SQL_HANDLE_ENV environment/henv)]
+            ODBC_DEBUG ["CLOSE-ENVIRONMENT" lf]
 
-            as red-value! logic/box true
+            result: result-of SQLFreeHandle SQL_HANDLE_ENV environment/henv
+
+            ODBC_DEBUG ["SQLFreeHandle " result lf]
+
+            REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_ENV environment/henv)) exit
+            ]
+
+            environment/henv: null
+
+            SET_RETURN((logic/box true))
         ]
 
 
@@ -1113,60 +1203,49 @@ Red [
         diagnose-error: func [
             type    [integer!]
             holder  [sql-handle!]
+            return: [red-block!]
             /local
-                result state native-error message-text text-length buffer-length
-                message char record
+                result error state native message size length
         ][
-            record: 0
-            until [
-                record: record + 1
+            ODBC_DEBUG ["DIAGNOSE-ERROR" lf]
 
-                state:        as c-string! allocate-buffer 12
-                native-error: 0
-                text-length:  0
+            error:      block/make-in null 5
+            state:      allocate 12
+            native:     0
+            size:       4096
+            message:    allocate size
+            length:     0
 
-                result: SQLGetDiagRec type
-                                      holder
-                                      record
-                                      as byte-ptr! state
-                                     :native-error
-                                      null
-                                      0
-                                     :text-length                               print ["SQLGetDiagRecord " result lf]
-                                                                                if result = SQL_ERROR [exit]
-                buffer-length: (text-length + 1) << 1
-                message:        as c-string! allocate-buffer buffer-length
+            result: result-of SQLGetDiagRec type
+                                            holder
+                                            1
+                                            state
+                                           :native
+                                            message
+                                            size
+                                           :length
 
-                result: SQLGetDiagRec type
-                                      holder
-                                      record
-                                      as byte-ptr! state
-                                     :native-error
-                                      as byte-ptr! message
-                                      buffer-length
-                                     :text-length                               print ["SQLGetDiagRecord " result " " state " " native-error " " message " " text-length lf]
-                                                                                if result = SQL_ERROR [exit]
-                result = SQL_NO_DATA
+            ODBC_DEBUG ["SQLGetDiagRecord " result lf]
+
+            switch result [
+                SQL_ERROR
+                SQL_INVALID_HANDLE [
+                    none/make-in error
+                    integer/make-in error 0
+                    none/make-in error
+                ]
+                SQL_SUCCESS
+                SQL_SUCCESS_WITH_INFO [
+                    string/load-in as c-string! state 5 error UTF-16LE
+                    integer/make-in error native
+                    string/load-in as c-string! message length error UTF-16LE
+                ]
+                SQL_NO_DATA []
             ]
+
+            error
         ]
 
-
-        ;-------------------------------------------------------- throw-error --
-        ;
-
-        throw-error: func [
-            cmds            [red-block!]
-            cmd             [red-value!]
-            catch?          [logic!]
-            /local
-                base        [red-value!]
-        ][
-            base:       block/rs-head cmds
-            cmds:       as red-block! stack/push as red-value! cmds
-            cmds/head: (as-integer cmd - base) >> 4
-
-            fire [TO_ERROR(script invalid-data) cmds]
-        ]
     ]
 ]
 
@@ -1179,12 +1258,15 @@ context [
     ;--------------------------------------------------------------- routines --
     ;
 
+    _open-environment:   routine [] [odbc/open-environment]
+
     _list-sources:       routine [sources [block!]] [odbc/list-sources sources]
     _list-drivers:       routine [drivers [block!]] [odbc/list-drivers drivers]
 
     _open-connection:    routine [dsn [string!]] [odbc/open-connection dsn]
 
     _open-statement:     routine [connection [handle!]] [odbc/open-statement  connection]
+
     _prepare-statement:  routine [statement  [handle!] sql     [block!]] [odbc/prepare-statement  statement sql    ]
     _execute-statement:  routine [statement  [handle!] sql     [block!]] [odbc/execute-statement  statement sql    ]
     _describe-statement: routine [statement  [handle!] columns [block!]] [odbc/describe-statement statement columns]
@@ -1192,7 +1274,19 @@ context [
     _catalog-statement:  routine [statement  [handle!] catalog [block!]] [odbc/catalog-statement  statement catalog]
 
     _close-statement:    routine [statement  [handle!]] [odbc/close-statement  statement ]
+
     _close-connection:   routine [connection [handle!]] [odbc/close-connection connection]
+
+    _close-environment:  routine [] [odbc/close-environment]
+
+
+    ;------------------------------------------------------------ environment --
+    ;
+
+    environment: object [
+        handle:      none
+        connections: []
+    ]
 
 
     ;----------------------------------------------------------------- protos --
@@ -1211,6 +1305,22 @@ context [
         sql:        none
     ]
 
+    ;------------------------------------------------------------------- init --
+    ;
+
+    set 'odbc-init function [
+        "Init ODBC environment."
+    ][
+        result: _open-environment
+
+        unless handle? result [
+            cause-error 'user 'message reduce [rejoin ["cannot init environment: " mold result]]
+        ]
+
+        environment/handle: result
+    ]
+
+    odbc-init
 
     ;------------------------------------------------------------------- open --
     ;
@@ -1219,11 +1329,21 @@ context [
         "Connect to a datasource."
         datasource [string!] "connection string"
     ][
-        any [handle: _open-connection datasource                                cause-error 'user 'message ["Error opening connection."]]
+        odbc-init
 
-        make connection-proto compose [
-            handle: (handle)
+        result: _open-connection datasource
+
+        unless handle? result [
+            cause-error 'user 'message reduce [rejoin [{cannot connect "} datasource {": } mold result]]
         ]
+
+        connection: make connection-proto [
+            handle: result
+        ]
+
+        append environment/connections connection
+
+        connection
     ]
 
 
@@ -1234,10 +1354,14 @@ context [
         "Returns an ODBC statement."
         connection [object!]
     ][
-        any [handle: _open-statement connection/handle                          cause-error 'user 'message ["Error opening statement."]]
+        result: _open-statement connection/handle
+
+        unless handle? result [
+            cause-error 'user 'message reduce [rejoin ["cannot allocate statement: " mold result]]
+        ]
 
         statement: make statement-proto compose [
-            handle:     (handle)
+            handle:      result
             connection: (connection)
             sql:         none
         ]
@@ -1254,7 +1378,11 @@ context [
     set 'odbc-sources function [
         "Returns block of ODBC datasource/description pairs"
     ][
-        any [_list-sources sources: copy []                                     cause-error 'user 'message ["Error fetching datasources."]]
+        result: _list-sources sources: copy []
+        
+        if block? result [
+            cause-error 'user 'message reduce [rejoin ["cannot list sources: " mold result]]
+        ]
 
         new-line/skip/all sources on 2
     ]
@@ -1267,7 +1395,11 @@ context [
         "Returns block of ODBC driver-description/attributes pairs"
         /local desc attrs attr
     ][
-        any [_list-drivers drivers: copy []                                     cause-error 'user 'message ["Error fetching drivers."]]
+        result: _list-drivers drivers: copy []
+        
+        if block? result [
+            cause-error 'user 'message reduce [rejoin ["cannot list drivers: " mold result]]
+        ]
 
         drivers: collect [foreach [desc attrs] drivers [
             attrs: split head remove back tail attrs #"^@"
@@ -1296,29 +1428,54 @@ context [
     ][
         query: reduce either block? sql [sql] [[sql]]                           ;-- block argument
 
-        any [parse query [[string! | 'tables | 'columns | 'types] to end]       cause-error 'script 'invalid-arg [sql]]
+        unless parse query [[string! | 'tables | 'columns | 'types] to end] [
+            cause-error 'script 'invalid-arg [sql]
+        ]
 
         switch type?/word value: first query [
             word! [ ;-- catalog --
-                any [ _catalog-statement statement/handle query                 cause-error 'access 'cannot-open [sql]]
-                any [_describe-statement statement/handle result: copy []       cause-error 'access 'cannot-open [sql]]
+                result: _catalog-statement statement/handle query
+
+                if block? result [                  
+                    cause-error 'user 'message reduce [rejoin ["cannot catalog " mold sql ": " mold result/error]]
+                ]
+
+                result: _describe-statement statement/handle data: copy []
+
+                if block? result [                  
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result/error]]
+                ] 
             ]
 
             string! [ ;-- statement --
                 unless same? statement/sql value [                              ;-- prepare new statement
-                    any [_prepare-statement statement/handle query              cause-error 'access 'cannot-open [sql]]
+                    result: _prepare-statement statement/handle query
+ 
+                    if block? result [                  
+                        cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold sql ": " mold result/error]]
+                    ]
+
                     statement/sql: value
                 ]
 
-                any [ _execute-statement statement/handle query                 cause-error 'access 'cannot-open [sql]]
-                any [_describe-statement statement/handle result: copy []       cause-error 'access 'cannot-open [sql]]
+                result: _execute-statement statement/handle query
+
+                if block? result [                  
+                    cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold sql ": " mold result/error]]
+                ]
+
+                result: _describe-statement statement/handle data: copy []
+
+                if block? result [                  
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result/error]]
+                ]
             ]
         ]
 
-        either integer? rows: first result [
+        either integer? rows: first data [
             rows                                                                ;-- number of affected rows
         ][
-            collect [foreach column result [keep to word! column]]              ;-- column titles
+            collect [foreach column data [keep to word! column]]                ;-- column titles
         ]
     ]
 
@@ -1336,7 +1493,11 @@ context [
             cause-error 'user 'message ["Not implemented yet."]
         ]
 
-		any [_fetch-statement statement/handle rows: copy []                 cause-error 'user 'message ["Error fetch statement."]]
+		result: _fetch-statement statement/handle rows: copy []
+        
+        if block? result [                  
+            cause-error 'user 'message reduce [rejoin ["cannot fetch statement " mold sql ": " mold result/error]]
+        ]
 
         new-line/all rows on
     ]
@@ -1349,25 +1510,57 @@ context [
         "Close connection or statement."
         entity [object!] "connection or statement handle"
     ][
-        any [in entity 'type                                                    cause-error 'script 'invalid-arg [entity]]
+        unless in entity 'type [
+            cause-error 'script 'invalid-arg [entity]
+        ]
 
         switch entity/type [
             connection [
-                while [not tail? entity/statements] [
-                    odbc-close take entity/statements
+                connection: entity
+
+                while [not tail? connection/statements] [
+                    odbc-close take connection/statements
                 ]
 
-                _close-connection entity/handle
-                entity/statements: copy []
+                result: _close-connection connection/handle
+            
+                if block? result [
+                    cause-error 'user 'message reduce [rejoin ["cannot close connection: " mold result]]
+                ]
+
+                clear connection/statements
             ]
             statement [
-                _close-statement entity/handle
-                entity/connection: none
+                statement: entity
+
+                result: _close-statement statement/handle
+
+                if block? result [
+                    cause-error 'user 'message reduce [rejoin ["cannot close statement: " mold result]]
+                ]
+
+                statement/connection: none
             ]
         ]
 
         entity/handle: none
         entity
+    ]
+
+
+    ;------------------------------------------------------------------ close --
+    ;
+
+    set 'odbc-free function [
+        "Close environment."
+    ][
+        result: _close-environment
+
+        if block? result [
+            cause-error 'user 'message reduce [rejoin ["cannot free environment: " mold result]]
+        ]
+
+        environment/handle: none
     ]
 
 ]
