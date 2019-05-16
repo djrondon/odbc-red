@@ -114,6 +114,25 @@ Red [
         ]
 
 
+        ;------------------------------------------------------- wide-length? --
+        ;
+
+        wide-length?: func [
+            "Returns length in wide chars, terminating null char included."
+            wide        [c-string!]
+            return:     [integer!]
+            /local
+                i j
+        ][
+            i: -1 j: 0
+            until [
+                i: i + 2 j: j + 2
+                all [wide/i = #"^@" wide/j = #"^@"]
+            ]
+            j / 2
+        ]
+
+
         ;--------------------------------------------------- open-environment --
         ;
 
@@ -162,7 +181,7 @@ Red [
         open-connection: func [
             datasource  [red-string!]
             /local
-                connection result input length
+                connection result conn-str conn-len
         ][
             ODBC_DEBUG ["OPEN-CONNECTION" lf]
 
@@ -196,13 +215,13 @@ Red [
 
             ;-- connect to driver
             ;
-            input:  unicode/to-utf16 datasource
-            length: string/rs-length? datasource
+            conn-str: unicode/to-utf16 datasource
+            conn-len: wide-length? conn-str
 
             result: result-of SQLDriverConnect connection/hdbc
                                                null
-                                               as byte-ptr! input
-                                               length
+                                               as byte-ptr! conn-str
+                                               conn-len
                                                null
                                                0
                                                null
@@ -252,42 +271,22 @@ Red [
 
         prepare-statement: func [
             holder      [red-handle!]
-            sql         [red-block!]
+            params      [red-block!]
             /local
-                statement query result red-str red-len u8-str u8-len u16-str u16-len u16-size
+                statement query text result red-str wide-str bytes i j
         ][
             ODBC_DEBUG ["PREPARE-STATEMENT" lf]
 
-            statement:  as statement! holder/value
-            u8-len:     declare int-ptr!
-            u8-len/value: -1
-
-            query:      block/rs-head sql
-            red-str:    as red-string! query
-            u8-str:     as byte-ptr! unicode/to-utf8 red-str u8-len
-
-            u16-size:   MultiByteToWideChar ODBC_CP_UTF8
-                                            ODBC_MB_ERR_INVALID_CHARS
-                                            u8-str
-                                            -1 ;NTS
-                                            null
-                                            0
-
-            u16-str:    allocate u16-size << 1 ; null-char incl
-
-            u16-size:   MultiByteToWideChar ODBC_CP_UTF8
-                                            ODBC_MB_ERR_INVALID_CHARS
-                                            u8-str
-                                            -1 ;NTS
-                                            u16-str
-                                            u16-size
+            statement: as statement! holder/value
 
             ;-- prepare statement
             ;
+            red-str:    as red-string! block/rs-head params
+            wide-str:   unicode/to-utf16 red-str                                ;-- null terminated utf16
 
-            result: result-of SQLPrepare statement/hstmt
-                                         u16-str ;as byte-ptr! text
-                                         u16-size ;str-len
+            result:     result-of SQLPrepare statement/hstmt
+                                             wide-str
+                                             wide-length? wide-str
 
             ODBC_DEBUG ["SQLPrepare " result lf]
 
@@ -491,8 +490,7 @@ Red [
             value       [red-value!]
             /local
                 result count io-type c-type sql-type digits
-                int-buffer float-buffer bit-buffer red-str str-len
-                u8-str u8-len u16-str u16-len u16-size
+                int-buffer float-buffer bit-buffer red-str wide-str wide-len
         ][
             ODBC_DEBUG ["BIND-PARAMETER" lf]
 
@@ -501,8 +499,6 @@ Red [
             c-type:          declare sqlsmallint!
             sql-type:        declare sqlsmallint!
             digits:          declare sqlsmallint!
-            u8-len:          declare int-ptr!
-            u8-len/value:    -1
 
             SET_INT16(count         num)
             SET_INT16(io-type       SQL_PARAM_INPUT)
@@ -531,29 +527,13 @@ Red [
                     SET_INT16(c-type    SQL_C_WCHAR)
                     SET_INT16(sql-type  SQL_VARCHAR)
                     red-str:            as red-string! value
-                    u8-str:             as byte-ptr! unicode/to-utf8 red-str u8-len
-                    str-len:            string/rs-length? red-str
-
-                    u16-size:           MultiByteToWideChar ODBC_CP_UTF8
-                                                            ODBC_MB_ERR_INVALID_CHARS
-                                                            u8-str
-                                                            -1 ;NTS
-                                                            null
-                                                            0
-
-                    u16-str:            allocate u16-size << 1 ; null-char incl
-
-                    u16-size:           MultiByteToWideChar ODBC_CP_UTF8
-                                                            ODBC_MB_ERR_INVALID_CHARS
-                                                            u8-str
-                                                            -1 ;NTS
-                                                            u16-str
-                                                            u16-size
-
-                    param/buffer:       u16-str
-                    param/buffer-size:  u16-size << 1
-                    param/column-size:  u16-size << 1
-                    param/strlen-ind:  (u16-size - 1) << 1
+                    wide-str:           unicode/to-utf16 red-str                ;-- null terminated
+                    wide-len:           wide-length? wide-str
+                    param/buffer-size:  wide-len << 1                           ;-- size in bytes
+                    param/buffer:       allocate-buffer param/buffer-size       ;-- deferred buffer!
+                    param/strlen-ind:   SQL_NTS
+                    param/column-size:  wide-len - 1                            ;-- FIXME: or string/rs-length? red-str
+                    copy-memory param/buffer as byte-ptr! wide-str param/buffer-size
                 ]
                 TYPE_LOGIC [
                     SET_INT16(c-type    SQL_C_LONG)
@@ -1483,13 +1463,13 @@ context [
                 result: _catalog-statement statement/handle query
 
                 if block? result [
-                    cause-error 'user 'message reduce [rejoin ["cannot catalog " mold sql ": " mold result]]
+                    cause-error 'user 'message reduce [rejoin ["cannot catalog " mold first query ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
                 if block? result [
-                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold first query ": " mold result]]
                 ]
             ]
 
@@ -1498,7 +1478,7 @@ context [
                     result: _prepare-statement statement/handle query
 
                     if block? result [
-                        cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold sql ": " mold result]]
+                        cause-error 'user 'message reduce [rejoin ["cannot prepare statement " mold first query ": " mold result]]
                     ]
 
                     statement/sql: value
@@ -1507,13 +1487,13 @@ context [
                 result: _execute-statement statement/handle query
 
                 if block? result [
-                    cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold sql ": " mold result]]
+                    cause-error 'user 'message reduce [rejoin ["cannot execute statement " mold first query ": " mold result]]
                 ]
 
                 result: _describe-statement statement/handle data: copy []
 
                 if block? result [
-                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold sql ": " mold result]]
+                    cause-error 'user 'message reduce [rejoin ["cannot describe statement " mold first query ": " mold result]]
                 ]
             ]
         ]

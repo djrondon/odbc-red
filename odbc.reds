@@ -13,7 +13,6 @@ Red/System [
 #switch OS [
 
 Windows [
-    #define KERNEL_LIBRARY "kernel32.dll"
     #define ODBC_LIBRARY "odbc32.dll"
     #define LIBC_LIBRARY "msvcrt.dll"
 ]
@@ -25,25 +24,6 @@ macOS [
 ]
 
 ]
-
-
-;--------------------------------------------------------------------- kernel --
-;
-
-#define ODBC_CP_UTF8               65001
-#define ODBC_MB_ERR_INVALID_CHARS      8
-
-#import [KERNEL_LIBRARY stdcall [
-    MultiByteToWideChar: "MultiByteToWideChar" [
-        code-page       [integer!]
-        flags           [integer!]
-        multi-str       [byte-ptr!]
-        multi-byte      [integer!]
-        wide-str        [byte-ptr!]
-        wide-size       [integer!]
-        return:         [integer!]
-    ]
-]]
 
 
 ;---------------------------------------------------------------- LIB_LIBRARY --
@@ -302,6 +282,8 @@ SQL_TIMESTAMP_STRUCT: alias struct! [
 
 ;--------------------------------------------------------------- ODBC_LIBRARY --
 ;
+;   Compare https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-function-arguments?view=sql-server-2017
+;   for functions having both ANSI (A) and Unicode (W) versions
 
 #import [ODBC_LIBRARY stdcall [
 
@@ -467,7 +449,7 @@ SQLNumResultCols: "SQLNumResultCols" [
 
 SQLPrepare: "SQLPrepareW" [
     statement               [sql-handle!]
-    statement-text          [byte-ptr!]
+    statement-text          [c-string!]
     text-length             [integer!]
     return:                 [integer!]
 ]
@@ -478,7 +460,7 @@ SQLRowCount: "SQLRowCount" [
     return:                 [integer!]
 ]
 
-SQLSetConnectAttr: "SQLSetConnectAttr" [
+SQLSetConnectAttr: "SQLSetConnectAttrW" [
     connection              [sql-handle!]
     attribute               [integer!]
     value                   [integer!]
@@ -504,11 +486,6 @@ SQLTables: "SQLTablesW" [
     name-length-3           [sqlsmallint! value]
     table-type              [c-string!]
     name-length-4           [sqlsmallint! value]
-    return:                 [integer!]
-]
-
-SQLTest: "SQLTest" [
-    column-number           [sqlsmallint! value]
     return:                 [integer!]
 ]
 
