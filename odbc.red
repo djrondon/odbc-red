@@ -66,10 +66,8 @@ Red [
         ]
 
         param!: alias struct! [
-            buffer      [byte-ptr!]
-            buffer-size [integer!]
-            column-size [integer!]
-            strlen-ind  [integer!]
+            size        [integer!]
+            offset      [integer!]
         ]
 
         statement!: alias struct! [
@@ -79,6 +77,7 @@ Red [
             columns-cnt [integer!]
             params      [param!]
             params-cnt  [integer!]
+            params-buf  [byte-ptr!]
         ]
 
 
@@ -535,89 +534,86 @@ Red [
         ;
 
         bind-parameter: func [
-            hstmt       [sql-handle!]
+            statement   [statement!]
             param       [param!]
             num         [integer!]
             value       [red-value!]
             /local
-                result count io-type c-type sql-type digits
-                int-buffer float-buffer bit-buffer red-str wide-str wide-len
+                result io-type c-type sql-type digits count buffer
+                int-buffer float-buffer str-buffer column-size strlen-ind
+                red-str wide-str wide-len
         ][
             ODBC_DEBUG ["BIND-PARAMETER" lf]
 
-            count:           declare sqlsmallint!
             io-type:         declare sqlsmallint!
-            c-type:          declare sqlsmallint!
             sql-type:        declare sqlsmallint!
+            c-type:          declare sqlsmallint!
             digits:          declare sqlsmallint!
+            count:           declare sqlsmallint!
+            strlen-ind:      0
+            column-size:     0
 
             SET_INT16(count         num)
             SET_INT16(io-type       SQL_PARAM_INPUT)
             SET_INT16(digits        0)
-            param/column-size:      0
-            param/strlen-ind:       0
 
             switch TYPE_OF(value) [
                 TYPE_INTEGER [
                     SET_INT16(c-type    SQL_C_LONG)
                     SET_INT16(sql-type  SQL_INTEGER)
-                    param/buffer-size:  4
-                    param/buffer:       allocate-buffer param/buffer-size
-                    int-buffer:         as pointer! [integer!] param/buffer
+                    int-buffer:         as pointer! [integer!] statement/params-buf + param/offset
                     int-buffer/value:   integer/get as red-value! value
+                    buffer:             as byte-ptr! int-buffer
                 ]
                 TYPE_FLOAT [
                     SET_INT16(c-type    SQL_C_DOUBLE)
                     SET_INT16(sql-type  SQL_DOUBLE)
-                    param/buffer-size:  8
-                    param/buffer:       allocate-buffer param/buffer-size
-                    float-buffer:       as pointer! [float!] param/buffer
+                    float-buffer:       as pointer! [float!] statement/params-buf + param/offset
                     float-buffer/value: float/get as red-value! value
+                    buffer:             as byte-ptr! float-buffer
                 ]
                 TYPE_STRING [
                     SET_INT16(c-type    SQL_C_WCHAR)
                     SET_INT16(sql-type  SQL_VARCHAR)
+                    strlen-ind:         SQL_NTS
                     red-str:            as red-string! value
                     wide-str:           unicode/to-utf16 red-str                ;-- null terminated
                     wide-len:           wide-length? wide-str
-                    param/buffer-size:  wide-len << 1                           ;-- size in bytes
-                    param/buffer:       allocate-buffer param/buffer-size       ;-- deferred buffer!
-                    param/strlen-ind:   SQL_NTS
-                    param/column-size:  wide-len - 1                            ;-- FIXME: or string/rs-length? red-str
-                    copy-memory param/buffer as byte-ptr! wide-str param/buffer-size
+                    column-size:        wide-len - 1                            ;-- FIXME: or string/rs-length? red-str
+                    str-buffer:         statement/params-buf + param/offset
+                    copy-memory str-buffer as byte-ptr! wide-str wide-len << 1
+                    buffer:             str-buffer
                 ]
                 TYPE_LOGIC [
                     SET_INT16(c-type    SQL_C_LONG)
                     SET_INT16(sql-type  SQL_BIT)
-                    param/buffer-size:  4
-                    param/buffer:       allocate-buffer param/buffer-size
-                    int-buffer:         as pointer! [integer!] param/buffer
+                    int-buffer:         as pointer! [integer!] statement/params-buf + param/offset
                     int-buffer/value:   either logic/get as red-value! value [1] [0]
+                    buffer:             as byte-ptr! int-buffer
                 ]
                 default [
                     SET_INT16(c-type    SQL_C_DEFAULT)
                     SET_INT16(sql-type  SQL_NULL_DATA)
-                    param/buffer-size:  0
-                    param/buffer:       null
-                    param/strlen-ind:   SQL_NULL_DATA
+                    strlen-ind:         SQL_NULL_DATA
+                    buffer:             null
                 ]
             ]
 
-            result: result-of SQLBindParameter hstmt
+            result: result-of SQLBindParameter statement/hstmt
                                                count
                                                io-type
                                                c-type
                                                sql-type
-                                               param/column-size
+                                               column-size
                                                digits
-                                               param/buffer
-                                               param/buffer-size
-                                              :param/strlen-ind
+                                               buffer
+                                               param/size
+                                              :strlen-ind
 
             ODBC_DEBUG ["SQLBindParameter " result lf]
 
             ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
-                SET_RETURN((diagnose-error SQL_HANDLE_STMT hstmt)) exit
+                SET_RETURN((diagnose-error SQL_HANDLE_STMT statement/hstmt)) exit
             ]
 
             SET_RETURN((logic/box true))
@@ -631,33 +627,62 @@ Red [
             holder      [red-handle!]
             sql         [red-block!]
             /local
-                statement result value p param
+                statement result value p param size
         ][
             ODBC_DEBUG ["EXECUTE-STATEMENT" lf]
 
             statement:  as statement! holder/value
 
-            unless statement/params = null [                                    ;-- first, free previously allocated params
-                param: statement/params                                         ;   and their related buffers, if any
-                loop statement/params-cnt [
-                    unless param/buffer = null [
-                        free-buffer param/buffer
-                    ]
-                    param: param + 1
-                ]
+            ;-- free buffers
+            ;
+            unless statement/params = null [                                    ;-- first, free previously allocated params/buffer
                 free-buffer as byte-ptr! statement/params
             ]
+            unless statement/params-buf = null [
+                free-buffer statement/params-buf
+            ]
 
-            statement/params-cnt: (block/rs-length? sql) - 1
-            statement/params:      as param! allocate-buffer statement/params-cnt * size? byte-ptr!
-                                                                                ;-- then, allocate new array of params
+            ;-- allocate params
+            ;
+            statement/params-cnt:   (block/rs-length? sql) - 1
+            statement/params:       as param! allocate-buffer statement/params-cnt * size? byte-ptr!
 
+            ;-- caluclate buffer size(s)
+            ;
             value: (block/rs-head sql) + 1                                      ;-- skip statement string
             param: statement/params
             p:     1
 
+            size:  0
             loop statement/params-cnt [
-                bind-parameter statement/hstmt param p value
+                param/offset: size
+
+                switch TYPE_OF(value) [
+                    TYPE_INTEGER [param/size: 4]
+                    TYPE_FLOAT   [param/size: 8]
+                    TYPE_LOGIC   [param/size: 4]
+                    TYPE_STRING  [param/size: (wide-length? unicode/to-utf16 as red-string! value) << 1 + 2 ]
+                    default      [param/size: 0]
+                ]
+
+                size:  size  + param/size
+                value: value + 1
+                param: param + 1
+                p:     p     + 1
+            ]
+
+            ;-- allocate buffer
+            ;
+            statement/params-buf: allocate-buffer size
+
+            ;-- bind parameters
+            ;
+            value: (block/rs-head sql) + 1
+            param: statement/params
+            p:     1
+
+            loop statement/params-cnt [
+                bind-parameter statement param p value
 
                 value: value + 1
                 param: param + 1
