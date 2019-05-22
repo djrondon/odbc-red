@@ -266,6 +266,57 @@ Red [
         ]
 
 
+        ;------------------------------------------------ translate-statement --
+        ;
+
+        translate-statement: func [
+            holder      [red-handle!]
+            sql         [red-string!]
+            /local
+                connection query text result in-sql out-sql out-str out size length i j bytes buf
+        ][
+            ODBC_DEBUG ["TRANSLATE-STATEMENT" lf]
+
+            connection: as connection! holder/value
+
+            ;-- prepare statement
+            ;
+            in-sql:     unicode/to-utf16 sql                                    ;-- null terminated utf16
+            length:     0
+
+            result:     result-of SQLNativeSql connection/hdbc
+                                               in-sql
+                                               wide-length? in-sql
+                                               null
+                                               0
+                                              :length
+
+            ODBC_DEBUG ["SQLNativeSql " result lf]
+
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+
+            size:       length << 1 + 2
+            out-sql:    as c-string! allocate-buffer size
+
+            result:     result-of SQLNativeSql connection/hdbc
+                                               in-sql
+                                               wide-length? in-sql
+                                               out-sql
+                                               size
+                                              :length
+
+            ODBC_DEBUG ["SQLNativeSql " result lf]
+
+            ODBC_REJECT((SQL_ERROR or SQL_INVALID_HANDLE)) [
+                SET_RETURN((diagnose-error SQL_HANDLE_DBC connection/hdbc)) exit
+            ]
+
+            SET_RETURN((string/load out-sql length UTF-16LE))
+        ]
+
+
         ;-------------------------------------------------- prepare-statement --
         ;
 
@@ -1284,6 +1335,7 @@ context [
     _open-connection:    routine [dsn [string!]] [odbc/open-connection dsn]
 
     _open-statement:     routine [connection [handle!]] [odbc/open-statement  connection]
+    _translate-statement: routine [connection [handle!] sql     [string!]] [odbc/translate-statement connection sql  ]
 
     _prepare-statement:  routine [statement  [handle!] sql     [block!]] [odbc/prepare-statement  statement sql    ]
     _execute-statement:  routine [statement  [handle!] sql     [block!]] [odbc/execute-statement  statement sql    ]
@@ -1439,6 +1491,28 @@ context [
         odbc-free
 
         new-line/skip/all drivers on 2
+    ]
+
+
+    ;-------------------------------------------------------------- translate --
+    ;
+
+    set 'odbc-translate function [
+        "Translates SQL statement into native SQL."
+        connection [object!]
+        sql [string!]
+    ][
+        unless any [in entity 'type entity/type = 'connection] [
+            cause-error 'script 'invalid-arg [entity]
+        ]
+
+        result: _translate-statement connection/handle sql
+
+        if block? result [
+            cause-error 'user 'message reduce [rejoin ["cannot translate statement " mold first query ": " mold result]]
+        ]
+
+        translation: result
     ]
 
 

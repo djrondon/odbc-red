@@ -441,6 +441,16 @@ SQLGetTypeInfo: "SQLGetTypeInfo" [
     return:                 [integer!]
 ]
 
+SQLNativeSql: "SQLNativeSqlW" [
+    connection              [sql-handle!]
+    in-connection-string    [c-string!]
+    string-length-1         [integer!]
+    out-connection-string   [c-string!]
+    buffer-length           [integer!]
+    string-length-2-ptr     [pointer! [integer!]]
+    return:                 [integer!]
+]
+
 SQLNumResultCols: "SQLNumResultCols" [
     statement               [sql-handle!]
     column-count            [byte-ptr!]
