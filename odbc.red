@@ -298,7 +298,7 @@ Red [
             ]
 
             size:       length << 1 + 2
-            out-sql:    as c-string! allocate-buffer size
+            out-sql:    as c-string! allocate size
 
             result:     result-of SQLNativeSql connection/hdbc
                                                in-sql
@@ -1502,7 +1502,7 @@ context [
         connection [object!]
         sql [string!]
     ][
-        unless any [in entity 'type entity/type = 'connection] [
+        unless any [in connection 'type connection/type = 'connection] [
             cause-error 'script 'invalid-arg [entity]
         ]
 
